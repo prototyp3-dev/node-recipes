@@ -1,0 +1,130 @@
+x-env: &env
+  CARTESI_LOG_LEVEL: ${CARTESI_LOG_LEVEL}
+  CARTESI_BLOCKCHAIN_HTTP_ENDPOINT: ${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT}
+  CARTESI_BLOCKCHAIN_WS_ENDPOINT: ${CARTESI_BLOCKCHAIN_WS_ENDPOINT}
+  CARTESI_BLOCKCHAIN_ID: ${CARTESI_BLOCKCHAIN_ID}
+  CARTESI_CONTRACTS_INPUT_BOX_ADDRESS: ${CARTESI_CONTRACTS_INPUT_BOX_ADDRESS}
+  CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER: ${CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER}
+  CARTESI_AUTH_MNEMONIC: ${CARTESI_AUTH_MNEMONIC}
+  MAIN_SEQUENCER: ${MAIN_SEQUENCER}
+  AUTHORITY_ADDRESS: ${AUTHORITY_ADDRESS}
+  CARTESI_POSTGRES_ENDPOINT: postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
+  CARTESI_HTTP_PORT: 8080
+  HEALTHZ_PORT: 8081
+  GRAPHQL_DB: "hlgraphql"
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "password"
+
+services:
+  devnet:
+    image: ghcr.io/prototyp3-dev/test-devnet:devel
+    networks:
+      - devnet
+    ports:
+      - 8545:8545
+
+  database:
+    image: postgres:16-alpine
+    shm_size: 128mb
+    networks:
+      - devnet
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rollupsdb || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    environment:
+      <<: *env
+      POSTGRES_DB: rollupsdb
+
+  # db-create:
+  #   image: postgres:16-alpine
+  #   networks:
+  #     - devnet
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #   restart: "no"
+  #   environment:
+  #     <<: *env
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: "hlgraphql"
+  #     POSTGRES_USER: "postgres"
+  #   command: psql -h database -c "create database ${POSTGRES_DB};"
+
+
+  # migration:
+  #   image: cartesi/rollups-node-we:devel
+  #   command: cartesi-rollups-cli db upgrade -p postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #   networks:
+  #     - devnet
+  #   restart: "no"
+  #   environment:
+  #     <<: *env
+
+  # deploy:
+  #   image: cartesi/rollups-node-we:devel
+  #   command: cartesi-rollups-cli app deploy -t /mnt/snapshot/0
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #     devnet:
+  #       condition: service_started
+  #   networks:
+  #     - devnet
+  #   restart: "no"
+  #   volumes:
+  #     ./image:/mnt/snapshot/0
+  #   environment:
+  #     <<: *env
+
+  node:
+    image: ghcr.io/prototyp3-dev/test-node:devel
+    command: cartesi-rollups-node
+    healthcheck:
+      test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${HEALTHZ_PORT}/healthz"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - node_data:/var/lib/cartesi-rollups-node/data
+      - .cartesi/image:/mnt/snapshots/0
+    networks:
+      - devnet
+    ports:
+      - "8080:8080" # Supervisor
+    environment:
+      <<: *env
+
+  graphql_server:
+    image: ghcr.io/prototyp3-dev/test-hlgraphql:devel
+    init: true
+    depends_on:
+      database:
+        condition: service_healthy
+      node:
+        condition: service_healthy
+    networks:
+      - devnet
+    ports:
+      - "10004:10004"
+    environment:
+      <<: *env
+      GRAPHQL_PORT: 10004
+      POSTGRES_HOST: "database"
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: $${GRAPHQL_DB}
+
+volumes:
+  node_data:
+
+networks:
+  devnet:
