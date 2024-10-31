@@ -15,7 +15,7 @@ You could use [Cartesi cli](https://github.com/cartesi/cli) or you can generate 
 The following commands assumes you have cartesi machine on your system. Alternatively, you might want to use a docker container with all required packeges and run in interactive mode:
 
 ```shell
-docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:devel bash
+docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:latest bash
 ```
 
 First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/image.ext2`). Copy the base image to a working dir so you can start making changes. 
@@ -56,6 +56,12 @@ cartesi-machine --env=ROLLUP_HTTP_SERVER_URL=http://127.0.0.1:5004 --flash-drive
 
 The starting snapshot was saved to `.cartesi/image` directory. This snapshot is copied to your the node to be able to run the application.
 
+And finally, make sure the image directory has read permissions for all users
+
+```shell
+chmod a+xr .cartesi/image
+```
+
 ## Localhost
 
 Go to the path which contains your snapshot image and copy the dockerfile, the docker compose file, and the node.mk.
@@ -63,7 +69,16 @@ Go to the path which contains your snapshot image and copy the dockerfile, the d
 ```shell
 wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
 unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
+rm recipes.zip
 ```
+
+Build you node image containing the snapshot with:
+
+```shell
+make -f node.mk build-node 
+```
+
+Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.
 
 Then you can start devnet and database
 
@@ -78,12 +93,10 @@ Then you can start the node (it will also deploy the application)
 make -f node.mk run-node-localhost
 ```
 
-Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.
-
 Create the graphql database 
 
 ```shell
-make -f node.mk run-create-db-localhost
+make -f node.mk create-db-localhost
 ```
 
 And finally, run the graphql server
@@ -126,7 +139,7 @@ make -f node.mk run-node-<testnet>
 Create the graphql database and the graphql service
 
 ```shell
-make -f node.mk run-create-db-<testnet>
+make -f node.mk create-db-<testnet>
 make -f node.mk run-graphql-<testnet>
 ```
 
@@ -141,7 +154,7 @@ make -f node.mk stop-<testnet>
 Build image with:
 
 ```shell
-make -f node.mk build-node
+make -f node.mk build-node 
 ```
 
 Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.

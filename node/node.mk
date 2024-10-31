@@ -8,30 +8,30 @@ SHELL := /bin/bash
 .ONESHELL:
 
 build-node:
-	docker build -f node.dockerfile -build-arg IMAGE_PATH=${IMAGE_PATH} -t ${DIR}-node.
+	docker build -f node.dockerfile --build-arg IMAGE_PATH=${IMAGE_PATH} -t ${DIR}-node .
 
 run-devnet-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml up -d devnet
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d devnet
 
 run-database-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml up -d database
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d database
 
 run-node-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml up -d node
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d node
 
-run-create-db-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml exec database \
+create-db-%: ${ENVFILE}.%
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml exec database \
 	 /bin/bash -c 'PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -c \
 	 "create database $${GRAPHQL_DB};"'
 
 run-graphql-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml up -d graphql
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d graphql
 
 stop-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml down --remove-orphans -v
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml down --remove-orphans -v
 
-ps-%: ${ENVFILE}.%
-	@IMAGE_PATH=${IMAGE_PATH} docker compose --env-file $< -f node-compose.yml ps -a
+compose-%: ${ENVFILE}.%
+	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml ${ARGS}
 
 ${ENVFILE}.localhost:
 	@test ! -f $@ && echo "$@ not found. Creating with default values"

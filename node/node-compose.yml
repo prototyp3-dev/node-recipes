@@ -17,7 +17,7 @@ x-env: &env
 
 services:
   devnet:
-    image: ghcr.io/prototyp3-dev/test-devnet:devel
+    image: ghcr.io/prototyp3-dev/test-devnet:latest
     networks:
       - devnet
     ports:
@@ -40,7 +40,7 @@ services:
       POSTGRES_DB: rollupsdb
 
   node:
-    image: ghcr.io/prototyp3-dev/test-node:devel
+    image: ${DIR}-node
     command: cartesi-rollups-node
     healthcheck:
       test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${HEALTHZ_PORT}/healthz"]
@@ -52,16 +52,15 @@ services:
         condition: service_healthy
     volumes:
       - node_data:/var/lib/cartesi-rollups-node/data
-      - ${IMAGE_PATH}:/mnt/snapshots/0
     networks:
       - devnet
     ports:
-      - "8080:8080" # Supervisor
+      - "10000:10000" # Supervisor
     environment:
       <<: *env
 
-  graphql_server:
-    image: ghcr.io/prototyp3-dev/test-hlgraphql:devel
+  graphql:
+    image: ghcr.io/prototyp3-dev/test-hlgraphql:latest
     init: true
     depends_on:
       database:

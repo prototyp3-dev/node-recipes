@@ -3,7 +3,7 @@
 
 # syntax=docker.io/docker/dockerfile:1
 
-ARG TEST_NODE_VERSION=devel
+ARG TEST_NODE_VERSION=latest
 
 FROM ghcr.io/prototyp3-dev/test-node:${TEST_NODE_VERSION}
 
