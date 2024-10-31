@@ -2,4 +2,4 @@
 
 # Build and Run Node
 
-Check [here](node/README.md) for instructions.
+Check [here](node/node.md) for instructions.

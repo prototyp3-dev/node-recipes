@@ -2,6 +2,8 @@
 
 Instructions to run a cartesi rollups node
 
+Check [Prepare the Snapshot](#prepare-the-snapshot) for instructions to build the app snapshot, [Localhost](#localhost) to start a local node with a devnet, [Testnet](#testnet) to start local node using a testnet, and [Fly](#fly) for instructions to deploy a node on [Fly](https://fly.io/docs).
+
 ## Prepare the Snapshot
 
 ### Requirements
@@ -54,41 +56,51 @@ cartesi-machine --env=ROLLUP_HTTP_SERVER_URL=http://127.0.0.1:5004 --flash-drive
 
 The starting snapshot was saved to `.cartesi/image` directory. This snapshot is copied to your the node to be able to run the application.
 
-## Local
+## Localhost
 
-From a the location of the application snapshot `.cartesi/ìmage`
+Go to the path which contains your snapshot image and copy the dockerfile, the docker compose file, and the node.mk.
 
 ```shell
-make -f node.mk start
+wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
+unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
+```
+
+Then you can start devnet and database
+
+```shell
+make -f node.mk run-devnet-localhost
+make -f node.mk run-database-localhost
 ```
 
 Then you can start the node (it will also deploy the application)
 
 ```shell
-make -f node.mk run-node
+make -f node.mk run-node-localhost
 ```
+
+Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.
 
 Create the graphql database 
 
 ```shell
-make -f node.mk run-create-db
+make -f node.mk run-create-db-localhost
 ```
 
 And finally, run the graphql server
 
 ```shell
-make -f node.mk run-graphql
+make -f node.mk run-graphql-localhost
 ```
 
 To stop the environment just run:
 
 ```shell
-make -f node.mk stop
+make -f node.mk stop-localhost
 ```
 
 ## Testnet
 
-Define the following variables (tip: create a .env.<testnet> file and source it)
+Create an .env.<testnet> file with:
 
 ```shell
 CARTESI_LOG_LEVEL=
@@ -102,9 +114,34 @@ MAIN_SEQUENCER=
 AUTHORITY_ADDRESS=
 ```
 
-You can leave `AUTHORITY_ADDRESS` if you don't deployed it yet
+You can leave `AUTHORITY_ADDRESS` blank if you haven't deployed it yet.
 
+Then you use commands:
 
+```shell
+make -f node.mk run-database-<testnet>
+make -f node.mk run-node-<testnet>
+```
+
+Create the graphql database and the graphql service
+
+```shell
+make -f node.mk run-create-db-<testnet>
+make -f node.mk run-graphql-<testnet>
+```
+
+To stop the environment just run:
+
+```shell
+make -f node.mk stop-<testnet>
+```
 
 ## Deploy backend to fly.io
 
+Build image with:
+
+```shell
+make -f node.mk build-node
+```
+
+Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.

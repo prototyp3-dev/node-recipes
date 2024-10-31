@@ -39,50 +39,6 @@ services:
       <<: *env
       POSTGRES_DB: rollupsdb
 
-  # db-create:
-  #   image: postgres:16-alpine
-  #   networks:
-  #     - devnet
-  #   depends_on:
-  #     database:
-  #       condition: service_healthy
-  #   restart: "no"
-  #   environment:
-  #     <<: *env
-  #     POSTGRES_PASSWORD: password
-  #     POSTGRES_DB: "hlgraphql"
-  #     POSTGRES_USER: "postgres"
-  #   command: psql -h database -c "create database ${POSTGRES_DB};"
-
-
-  # migration:
-  #   image: cartesi/rollups-node-we:devel
-  #   command: cartesi-rollups-cli db upgrade -p postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
-  #   depends_on:
-  #     database:
-  #       condition: service_healthy
-  #   networks:
-  #     - devnet
-  #   restart: "no"
-  #   environment:
-  #     <<: *env
-
-  # deploy:
-  #   image: cartesi/rollups-node-we:devel
-  #   command: cartesi-rollups-cli app deploy -t /mnt/snapshot/0
-  #   depends_on:
-  #     database:
-  #       condition: service_healthy
-  #     devnet:
-  #       condition: service_started
-  #   networks:
-  #     - devnet
-  #   restart: "no"
-  #   volumes:
-  #     ./image:/mnt/snapshot/0
-  #   environment:
-  #     <<: *env
-
   node:
     image: ghcr.io/prototyp3-dev/test-node:devel
     command: cartesi-rollups-node
@@ -96,7 +52,7 @@ services:
         condition: service_healthy
     volumes:
       - node_data:/var/lib/cartesi-rollups-node/data
-      - .cartesi/image:/mnt/snapshots/0
+      - ${IMAGE_PATH}:/mnt/snapshots/0
     networks:
       - devnet
     ports:

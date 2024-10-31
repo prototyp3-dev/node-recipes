@@ -395,9 +395,9 @@ touch /etc/s6-overlay/s6-rc.d/advance/deploy-app/migrate
 echo "oneshot" > /etc/s6-overlay/s6-rc.d/deploy-app/type
 echo "#!/command/with-contenv sh
 if [ ! -z \${AUTHORITY_ADDRESS} ]; then
-    echo cartesi-rollups-cli app deploy -t /mnt/snapshot/0 -i \${AUTHORITY_ADDRESS}
+    cartesi-rollups-cli app deploy -t /mnt/snapshot/0 -i \${AUTHORITY_ADDRESS}
 else
-    echo cartesi-rollups-cli app deploy -t /mnt/snapshot/0
+    cartesi-rollups-cli app deploy -t /mnt/snapshot/0
 fi
 " > /etc/s6-overlay/s6-rc.d/deploy-app/run.sh
 chmod +x /etc/s6-overlay/s6-rc.d/deploy-app/run.sh
@@ -413,7 +413,9 @@ cartesi-rollups-node
 " > /etc/s6-overlay/s6-rc.d/node/run
 mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate \
-    /etc/s6-overlay/s6-rc.d/user/contents.d/deploy-app
+    /etc/s6-overlay/s6-rc.d/user/contents.d/deploy-app \
+    /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf \
+    /etc/s6-overlay/s6-rc.d/user/contents.d/node
 EOF
 
 # =============================================================================

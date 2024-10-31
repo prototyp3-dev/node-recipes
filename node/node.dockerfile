@@ -7,6 +7,5 @@ ARG TEST_NODE_VERSION=devel
 
 FROM ghcr.io/prototyp3-dev/test-node:${TEST_NODE_VERSION}
 
-COPY --chown=cartesi:cartesi .cartesi/image /mnt/snapshot/0
-
-
+ARG IMAGE_PATH .cartesi/image
+COPY --chown=cartesi:cartesi ${IMAGE_PATH} /mnt/snapshot/0
