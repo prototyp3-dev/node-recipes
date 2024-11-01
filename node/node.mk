@@ -7,31 +7,34 @@ SHELL := /bin/bash
 
 .ONESHELL:
 
-build-node:
-	docker build -f node.dockerfile --build-arg IMAGE_PATH=${IMAGE_PATH} -t ${DIR}-node .
-
 run-devnet-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d devnet
+	@docker compose --env-file $< -f node-compose.yml up -d devnet
 
 run-database-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d database
+	@docker compose --env-file $< -f node-compose.yml up -d database
 
 run-node-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d node
+	@docker compose --env-file $< -f node-compose.yml up -d node
 
 create-db-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml exec database \
+	@docker compose --env-file $< -f node-compose.yml exec database \
 	 /bin/bash -c 'PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -c \
 	 "create database $${GRAPHQL_DB};"'
 
 run-graphql-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml up -d graphql
+	@docker compose --env-file $< -f node-compose.yml up -d graphql
 
 stop-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml down --remove-orphans -v
+	@docker compose --env-file $< -f node-compose.yml down --remove-orphans -v
 
 compose-%: ${ENVFILE}.%
-	@DIR=${DIR} docker compose --env-file $< -f node-compose.yml ${ARGS}
+	@docker compose --env-file $< -f node-compose.yml ${ARGS}
+
+hash = $(eval hash := $(shell hexdump -e '1/1 "%.2x"' ${IMAGE_PATH}/hash))$(value hash)
+
+deploy-%: ${ENVFILE}.% --check-envs
+	@docker compose --env-file $< -f node-compose.yml cp ${IMAGE_PATH} node:/mnt/snapshots/${hash}
+	docker compose --env-file $< -f node-compose.yml exec node bash -c "/deploy.sh /mnt/snapshots/${hash}"
 
 ${ENVFILE}.localhost:
 	@test ! -f $@ && echo "$@ not found. Creating with default values"
@@ -47,3 +50,8 @@ ${ENVFILE}.localhost:
 
 ${ENVFILE}.%:
 	test ! -f $@ && $(error "file $@ doesn't exist")
+
+
+--check-envs:
+	@set -e
+	@test ! -z '${IMAGE_PATH}' || (echo "Must define IMAGE_PATH" && exit 1)

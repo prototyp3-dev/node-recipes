@@ -64,21 +64,13 @@ chmod a+xr .cartesi/image
 
 ## Localhost
 
-Go to the path which contains your snapshot image and copy the dockerfile, the docker compose file, and the node.mk.
+Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
 
 ```shell
 wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
 unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
 rm recipes.zip
 ```
-
-Build you node image containing the snapshot with:
-
-```shell
-make -f node.mk build-node 
-```
-
-Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.
 
 Then you can start devnet and database
 
@@ -87,7 +79,7 @@ make -f node.mk run-devnet-localhost
 make -f node.mk run-database-localhost
 ```
 
-Then you can start the node (it will also deploy the application)
+Start the node
 
 ```shell
 make -f node.mk run-node-localhost
@@ -104,6 +96,14 @@ And finally, run the graphql server
 ```shell
 make -f node.mk run-graphql-localhost
 ```
+
+With the infrastructure running, you can deploy the application with
+
+```shell
+make -f node.mk deploy-localhost 
+```
+
+Note: you can set `IMAGE_PATH` for an image path different than the default `.cartesi/image`.
 
 To stop the environment just run:
 
@@ -125,14 +125,22 @@ CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=
 CARTESI_AUTH_MNEMONIC=
 MAIN_SEQUENCER=
 AUTHORITY_ADDRESS=
+ESPRESSO_BASE_URL=
+ESPRESSO_STARTING_BLOCK=
+ESPRESSO_NAMESPACE=
 ```
 
 You can leave `AUTHORITY_ADDRESS` blank if you haven't deployed it yet.
 
-Then you use commands:
+Then start the database:
 
 ```shell
 make -f node.mk run-database-<testnet>
+```
+
+Start the node:
+
+```shell
 make -f node.mk run-node-<testnet>
 ```
 
@@ -143,6 +151,12 @@ make -f node.mk create-db-<testnet>
 make -f node.mk run-graphql-<testnet>
 ```
 
+And deploy the application with (optionally set `IMAGE_PATH`):
+
+```shell
+make -f node.mk deploy-localhost 
+```
+
 To stop the environment just run:
 
 ```shell
@@ -150,11 +164,3 @@ make -f node.mk stop-<testnet>
 ```
 
 ## Deploy backend to fly.io
-
-Build image with:
-
-```shell
-make -f node.mk build-node 
-```
-
-Note: you can set `IMAGE_PATH` for image paths different than the default `.cartesi/image`.

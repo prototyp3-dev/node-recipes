@@ -8,9 +8,13 @@ x-env: &env
   CARTESI_AUTH_MNEMONIC: ${CARTESI_AUTH_MNEMONIC}
   MAIN_SEQUENCER: ${MAIN_SEQUENCER}
   AUTHORITY_ADDRESS: ${AUTHORITY_ADDRESS}
+  ESPRESSO_BASE_URL: ${ESPRESSO_BASE_URL:-https://query.decaf.testnet.espresso.network/v0}
+  ESPRESSO_STARTING_BLOCK: ${ESPRESSO_STARTING_BLOCK:-132500}
+  ESPRESSO_NAMESPACE: ${ESPRESSO_NAMESPACE:-55555}
   CARTESI_POSTGRES_ENDPOINT: postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
-  CARTESI_HTTP_PORT: 8080
-  HEALTHZ_PORT: 8081
+  CARTESI_HTTP_ADDRESS: 0.0.0.0
+  CARTESI_HTTP_PORT: 10000
+  HEALTHZ_PORT: 10001
   GRAPHQL_DB: "hlgraphql"
   POSTGRES_USER: "postgres"
   POSTGRES_PASSWORD: "password"
@@ -40,10 +44,10 @@ services:
       POSTGRES_DB: rollupsdb
 
   node:
-    image: ${DIR}-node
-    command: cartesi-rollups-node
+    image: ghcr.io/prototyp3-dev/test-node
+    command: /init
     healthcheck:
-      test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${HEALTHZ_PORT}/healthz"]
+      test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${CARTESI_HTTP_PORT}/healthz"]
       interval: 1s
       timeout: 1s
       retries: 5
@@ -61,11 +65,14 @@ services:
 
   graphql:
     image: ghcr.io/prototyp3-dev/test-hlgraphql:latest
-    init: true
+    command: /init
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null --header='Content-Type: application/json' --post-data='{\"query\":\"{ inputs(last:1) { edges { node { id } } } }\"}' 'http://127.0.0.1:10004/graphql'"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
     depends_on:
       database:
-        condition: service_healthy
-      node:
         condition: service_healthy
     networks:
       - devnet
@@ -76,7 +83,7 @@ services:
       GRAPHQL_PORT: 10004
       POSTGRES_HOST: "database"
       POSTGRES_PORT: 5432
-      POSTGRES_DB: $${GRAPHQL_DB}
+      POSTGRES_DB: "hlgraphql"
 
 volumes:
   node_data:
