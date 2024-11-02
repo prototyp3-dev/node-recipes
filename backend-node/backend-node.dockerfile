@@ -6,7 +6,7 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG NONODO_VERSION=2.11.3-beta
+ARG NONODO_VERSION=2.11.4-beta
 
 # =============================================================================
 # STAGE: telegraf conf
@@ -126,23 +126,41 @@ RUN <<EOF
 mkdir -p /mnt/snapshots
 chown -R cartesi:cartesi /mnt
 echo "#!/bin/bash
-if [ ! -z \${AUTHORITY_ADDRESS} ]; then
-    cartesi-rollups-cli app deploy \
-     -t \$1 \
-     --mnemonic \"\${CARTESI_AUTH_MNEMONIC}\" \
-     --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \
-     -p \${CARTESI_POSTGRES_ENDPOINT} \
-     -i \${AUTHORITY_ADDRESS} || echo 'Not deployed'
-else
-    cartesi-rollups-cli app deploy \
-     -t \$1 \
-     --mnemonic \"\${CARTESI_AUTH_MNEMONIC}\" \
-     --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \
-     -p \${CARTESI_POSTGRES_ENDPOINT} || echo 'Not deployed'
+if [ ! -z \${OWNER} ]; then
+    owner_args=\"-o \${OWNER} -O \${OWNER}\"
 fi
-kill \$(ps x | grep cartesi-rollups-node | grep -v grep | tr -s ' ' | cut -d ' ' -f 2)
+if [ ! -z \${AUTHORITY_ADDRESS} ]; then
+    authority_arg=\"-i \${AUTHORITY_ADDRESS}\"
+fi
+if [ ! -z \${EPOCH_LENGTH} ]; then
+    epoch_arg=\"-e \${EPOCH_LENGTH}\"
+fi
+if [ ! -z \${SALT} ]; then
+    salt_arg=\"--salt \${SALT}\"
+fi
+cartesi-rollups-cli app deploy \
+    -t \$1 \
+    --private-key \${CARTESI_AUTH_PRIVATE_KEY} \
+    --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \
+    -p \${CARTESI_POSTGRES_ENDPOINT} \
+    \${owner_args} \
+    \${authority_arg} \
+    \${epoch_arg} \
+    \${salt_arg} \
+    \${EXTRA_ARGS} \
+    || echo 'Not deployed'
 " > /deploy.sh
 chmod +x /deploy.sh
+echo "#!/bin/bash
+cartesi-rollups-cli app register \
+    -t \$1 \
+    -p \${CARTESI_POSTGRES_ENDPOINT} \
+    -a \${APPLICATION_ADDRESS} \
+    -i \${AUTHORITY_ADDRESS} \
+    \${EXTRA_ARGS} \
+    || echo 'Not deployed'
+" > /register.sh
+chmod +x /register.sh
 EOF
 
 # =============================================================================

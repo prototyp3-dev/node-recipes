@@ -2,7 +2,131 @@
 
 Instructions to run a cartesi rollups node
 
-Check [Prepare the Snapshot](#prepare-the-snapshot) for instructions to build the app snapshot, [Localhost](#localhost) to start a local node with a devnet, [Testnet](#testnet) to start local node using a testnet, and [Fly](#fly) for instructions to deploy a node on [Fly](https://fly.io/docs).
+Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to start a local node with a devnet, [Testnet](#testnet) to start local node using a testnet, [Fly](#fly) for instructions to deploy a node on [Fly](https://fly.io/docs), and [Prepare the Snapshot](#prepare-the-snapshot) for instructions to build the app snapshot.
+
+## Setup
+
+Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
+
+```shell
+wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
+unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
+rm recipes.zip
+```
+
+Also, make sure you have the updated test node images:
+
+```shell
+docker pull ghcr.io/prototyp3-dev/test-node:latest
+docker pull ghcr.io/prototyp3-dev/test-graphql:latest
+```
+
+And if you will run a local devnet:
+
+```shell
+docker pull ghcr.io/prototyp3-dev/test-devnet:latest
+```
+
+## Localhost
+
+You can start running devnet and database
+
+```shell
+make -f node.mk run-devnet-localhost
+make -f node.mk run-database-localhost
+```
+
+Start the node
+
+```shell
+make -f node.mk run-node-localhost
+```
+
+Create the graphql database 
+
+```shell
+make -f node.mk create-db-localhost
+```
+
+And finally, run the graphql server
+
+```shell
+make -f node.mk run-graphql-localhost
+```
+
+With the infrastructure running, you can deploy the application with
+
+```shell
+make -f node.mk deploy-localhost 
+```
+
+Note: you can set `IMAGE_PATH` for an image path different than the default `.cartesi/image`.
+
+To stop the environment just run:
+
+```shell
+make -f node.mk stop-localhost
+```
+
+## Testnet
+
+Create an .env.<testnet> file with:
+
+```shell
+CARTESI_LOG_LEVEL=
+CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
+CARTESI_BLOCKCHAIN_WS_ENDPOINT=
+CARTESI_BLOCKCHAIN_ID=
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=
+CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=
+CARTESI_AUTH_PRIVATE_KEY=
+MAIN_SEQUENCER=
+ESPRESSO_BASE_URL=
+ESPRESSO_STARTING_BLOCK=
+ESPRESSO_NAMESPACE=
+```
+
+Then start the database:
+
+```shell
+make -f node.mk run-database-<testnet>
+```
+
+Start the node:
+
+```shell
+make -f node.mk run-node-<testnet>
+```
+
+Create the graphql database and the graphql service
+
+```shell
+make -f node.mk create-db-<testnet>
+make -f node.mk run-graphql-<testnet>
+```
+
+And deploy the application with (optionally set `IMAGE_PATH`):
+
+```shell
+make -f node.mk deploy-<testnet>
+```
+
+Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, `SALT`, and `OWNER`.
+
+To stop the environment just run:
+
+```shell
+make -f node.mk stop-<testnet>
+```
+
+Note: If want to register an already deployed application to the node use (optionally set `IMAGE_PATH`):
+
+```shell
+make -f node.mk register-<testnet> APPLICATION_ADDRESS=<app address> AUTHORITY_ADDRESS=<auth address> 
+```
+
+## Deploy backend to fly.io
+
 
 ## Prepare the Snapshot
 
@@ -61,106 +185,3 @@ And finally, make sure the image directory has read permissions for all users
 ```shell
 chmod a+xr .cartesi/image
 ```
-
-## Localhost
-
-Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
-
-```shell
-wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
-unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
-rm recipes.zip
-```
-
-Then you can start devnet and database
-
-```shell
-make -f node.mk run-devnet-localhost
-make -f node.mk run-database-localhost
-```
-
-Start the node
-
-```shell
-make -f node.mk run-node-localhost
-```
-
-Create the graphql database 
-
-```shell
-make -f node.mk create-db-localhost
-```
-
-And finally, run the graphql server
-
-```shell
-make -f node.mk run-graphql-localhost
-```
-
-With the infrastructure running, you can deploy the application with
-
-```shell
-make -f node.mk deploy-localhost 
-```
-
-Note: you can set `IMAGE_PATH` for an image path different than the default `.cartesi/image`.
-
-To stop the environment just run:
-
-```shell
-make -f node.mk stop-localhost
-```
-
-## Testnet
-
-Create an .env.<testnet> file with:
-
-```shell
-CARTESI_LOG_LEVEL=
-CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
-CARTESI_BLOCKCHAIN_WS_ENDPOINT=
-CARTESI_BLOCKCHAIN_ID=
-CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=
-CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=
-CARTESI_AUTH_MNEMONIC=
-MAIN_SEQUENCER=
-AUTHORITY_ADDRESS=
-ESPRESSO_BASE_URL=
-ESPRESSO_STARTING_BLOCK=
-ESPRESSO_NAMESPACE=
-```
-
-You can leave `AUTHORITY_ADDRESS` blank if you haven't deployed it yet.
-
-Then start the database:
-
-```shell
-make -f node.mk run-database-<testnet>
-```
-
-Start the node:
-
-```shell
-make -f node.mk run-node-<testnet>
-```
-
-Create the graphql database and the graphql service
-
-```shell
-make -f node.mk create-db-<testnet>
-make -f node.mk run-graphql-<testnet>
-```
-
-And deploy the application with (optionally set `IMAGE_PATH`):
-
-```shell
-make -f node.mk deploy-localhost 
-```
-
-To stop the environment just run:
-
-```shell
-make -f node.mk stop-<testnet>
-```
-
-## Deploy backend to fly.io

@@ -7,34 +7,45 @@ SHELL := /bin/bash
 
 .ONESHELL:
 
-run-devnet-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml up -d devnet
+-%:
+	$(eval ENV = $@)
 
-run-database-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml up -d database
+run-devnet-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d devnet
 
-run-node-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml up -d node
+run-database-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d database
 
-create-db-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml exec database \
+run-node-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d node
+
+create-db-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec database \
 	 /bin/bash -c 'PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -c \
 	 "create database $${GRAPHQL_DB};"'
 
-run-graphql-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml up -d graphql
+run-graphql-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d graphql
 
-stop-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml down --remove-orphans -v
+stop-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml down --remove-orphans -v
 
-compose-%: ${ENVFILE}.%
-	@docker compose --env-file $< -f node-compose.yml ${ARGS}
+compose-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml ${ARGS}
 
 hash = $(eval hash := $(shell hexdump -e '1/1 "%.2x"' ${IMAGE_PATH}/hash))$(value hash)
 
-deploy-%: ${ENVFILE}.% --check-envs
-	@docker compose --env-file $< -f node-compose.yml cp ${IMAGE_PATH} node:/mnt/snapshots/${hash}
-	docker compose --env-file $< -f node-compose.yml exec node bash -c "/deploy.sh /mnt/snapshots/${hash}"
+deploy-%: ${ENVFILE}.% --check-envs -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/snapshots/${hash}
+	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
+	 "OWNER=${OWNER} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EPOCH_LENGTH=${EPOCH_LENGTH} SALT=${SALT} EXTRA_ARGS=${EXTRA_ARGS} \
+	 /deploy.sh /mnt/snapshots/${hash}"
+
+register-%: ${ENVFILE}.% --check-envs -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/snapshots/${hash}
+	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
+	 "APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EXTRA_ARGS=${EXTRA_ARGS} \
+	 /register.sh /mnt/snapshots/${hash}"
 
 ${ENVFILE}.localhost:
 	@test ! -f $@ && echo "$@ not found. Creating with default values"
@@ -44,9 +55,8 @@ ${ENVFILE}.localhost:
 	echo CARTESI_BLOCKCHAIN_ID=31337 >> $@
 	echo CARTESI_CONTRACTS_INPUT_BOX_ADDRESS="0x593E5BCf894D6829Dd26D0810DA7F064406aebB6" >> $@
 	echo CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=10 >> $@
-	echo 'CARTESI_AUTH_MNEMONIC="test test test test test test test test test test test junk"' >> $@
+	echo CARTESI_AUTH_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 >> $@
 	echo MAIN_SEQUENCER="ethereum" >> $@
-	echo AUTHORITY_ADDRESS= >> $@
 
 ${ENVFILE}.%:
 	test ! -f $@ && $(error "file $@ doesn't exist")
