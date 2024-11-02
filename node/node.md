@@ -108,10 +108,10 @@ make -f node.mk run-graphql-<testnet>
 And deploy the application with (optionally set `IMAGE_PATH`):
 
 ```shell
-make -f node.mk deploy-<testnet>
+make -f node.mk deploy-<testnet> OWNER=<app and auth owner>
 ```
 
-Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, `SALT`, and `OWNER`.
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`.Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
 
 To stop the environment just run:
 
