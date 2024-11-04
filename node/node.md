@@ -62,6 +62,12 @@ make -f node.mk deploy-localhost
 
 Note: you can set `IMAGE_PATH` for an image path different than the default `.cartesi/image`.
 
+Run the reverse proxy so you can access all services via a single entry point
+
+```shell
+make -f node.mk run-proxy-localhost
+```
+
 To stop the environment just run:
 
 ```shell

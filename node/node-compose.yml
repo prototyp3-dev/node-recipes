@@ -89,6 +89,48 @@ services:
     env_file:
      - ${ENVFILENAME}
 
+  proxy:
+    image: traefik:3.2.0
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        mkdir -p /etc/traefik
+        echo '
+        entryPoints:
+          web:
+            address: ":80"
+            asDefault: true
+        providers:
+          file:
+            filename: /etc/traefik/file_conf.yaml
+        accessLog: {}
+        ' > /etc/traefik/traefik.yaml
+        echo '
+        http:
+          routers:
+            inspect-router:
+              rule: "PathPrefix(`/inspect`)"
+              service: inspect-service
+            advance-router:
+              rule: "PathPrefix(`/graphql`)"
+              service: advance-service
+          services:
+            inspect-service:
+              loadBalancer:
+                servers:
+                  - url: "http://node:10000/inspect"
+            advance-service:
+              loadBalancer:
+                servers:
+                  - url: "http://graphql:10004/graphql"
+        ' > /etc/traefik/file_conf.yaml
+        exec /entrypoint.sh traefik
+    networks:
+      - devnet
+    ports:
+      - "8080:80"
+
 volumes:
   node_data:
   snapshots:
