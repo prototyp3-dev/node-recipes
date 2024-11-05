@@ -18,7 +18,7 @@ Also, make sure you have the updated test node images:
 
 ```shell
 docker pull ghcr.io/prototyp3-dev/test-node:latest
-docker pull ghcr.io/prototyp3-dev/test-graphql:latest
+docker pull ghcr.io/prototyp3-dev/test-hlgraphql:latest
 ```
 
 And if you will run a local devnet:
@@ -79,17 +79,17 @@ make -f node.mk stop-localhost
 Create an .env.<testnet> file with:
 
 ```shell
-CARTESI_LOG_LEVEL=
+CARTESI_LOG_LEVEL=info
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
+CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
+MAIN_SEQUENCER=espresso
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
+ESPRESSO_NAMESPACE=51025
+ESPRESSO_STARTING_BLOCK=
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
 CARTESI_BLOCKCHAIN_WS_ENDPOINT=
 CARTESI_BLOCKCHAIN_ID=
-CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=
-CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=
 CARTESI_AUTH_PRIVATE_KEY=
-MAIN_SEQUENCER=
-ESPRESSO_BASE_URL=
-ESPRESSO_STARTING_BLOCK=
-ESPRESSO_NAMESPACE=
 ```
 
 Then start the database:

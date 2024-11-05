@@ -14,10 +14,10 @@ node-image: --check-envs
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node" \
 		--label "org.opencontainers.image.description=Test Node" \
-		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/test-node" \
+		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.created=$$(date -Iseconds --utc)" \
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
-		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/test-node" \
+		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
 
@@ -29,10 +29,10 @@ hlgraphql-image: --check-envs
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-hlgraphql" \
 		--label "org.opencontainers.image.description=Test High Level Graphql" \
-		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/test-node" \
+		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.created=$$(date -Iseconds --utc)" \
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
-		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/test-node" \
+		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
 devnet-image: --check-envs
@@ -43,10 +43,10 @@ devnet-image: --check-envs
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-devnet" \
 		--label "org.opencontainers.image.description=Test Devnet" \
-		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/test-node" \
+		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.created=$$(date -Iseconds --utc)" \
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
-		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/test-node" \
+		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
 --check-envs:
