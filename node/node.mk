@@ -1,7 +1,7 @@
 
 ENVFILE := .env
 DIR := $(shell basename ${PWD})
-IMAGE_PATH ?= '.cartesi/path'
+IMAGE_PATH ?= '.cartesi/image'
 
 SHELL := /bin/bash
 
@@ -18,6 +18,9 @@ run-database-%: ${ENVFILE}.% -%
 
 run-node-%: ${ENVFILE}.% -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d node
+
+run-proxy-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d proxy
 
 create-db-%: ${ENVFILE}.% -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec database \
@@ -37,6 +40,7 @@ hash = $(eval hash := $(shell hexdump -e '1/1 "%.2x"' ${IMAGE_PATH}/hash))$(valu
 
 deploy-%: ${ENVFILE}.% --check-envs -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/snapshots/${hash}
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec -u root node bash -c "chown -R cartesi:cartesi /mnt/snapshots/${hash}"
 	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
 	 "OWNER=${OWNER} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EPOCH_LENGTH=${EPOCH_LENGTH} SALT=${SALT} EXTRA_ARGS=${EXTRA_ARGS} \
 	 /deploy.sh /mnt/snapshots/${hash}"

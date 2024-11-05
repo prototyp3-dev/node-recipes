@@ -54,6 +54,12 @@ And finally, run the graphql server
 make -f node.mk run-graphql-localhost
 ```
 
+Run the reverse proxy so you can access all services via a single entry point
+
+```shell
+make -f node.mk run-proxy-localhost
+```
+
 With the infrastructure running, you can deploy the application with
 
 ```shell
@@ -96,6 +102,11 @@ Start the node:
 
 ```shell
 make -f node.mk run-node-<testnet>
+```
+Start the reverse proxy:
+
+```shell
+make -f node.mk run-proxy-<testnet>
 ```
 
 Create the graphql database and the graphql service
@@ -189,24 +200,24 @@ The following commands assumes you have the `cartesi-machine` command on your sy
 docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:latest bash
 ```
 
-First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/image.ext2`). Copy the base image to a working dir so you can start making changes. 
+First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/root.ext2`). Copy the base image to a working dir so you can start making changes. 
 
 ```shell
-cp /path/to/rootfs.ext2 rootfs.ext2
+cp /path/to/rootfs.ext2 root.ext2
 ```
 
-This rootfs.ext2` is your working image. Then, you should resize as you see necessary
+This root.ext2` is your working image. Then, you should resize as you see necessary
 
 ```shell
-resize2fs -f rootfs.ext2 128M
+resize2fs -f root.ext2 128M
 ```
 
-#### Start from a rootfs.ext2 and prepare image
+#### Start from a root.ext2 and prepare image
 
 Before you install you app in the image, you should prepare and install any dependencies. Start the cartesi machine in interactive mode with network and volumes virtio:
 
 ```shell
-cartesi-machine --network --volume=.:/mnt --workdir=/mnt --flash-drive=label:root,filename:rootfs.ext2,shared -u=root -it -- bash
+cartesi-machine --network --volume=.:/mnt --workdir=/mnt --flash-drive=label:root,filename:root.ext2,shared -u=root -it -- bash
 ```
 
 Now that you are inside the cartesi machine, install any packages required to run your application. Also, copy your projects files to its final dir (we'll consider it is a single `app` binary):
@@ -222,7 +233,7 @@ With the rootfs in place, you can start the cartesi machine in rollups mode and 
 
 ```shell
 mkdir -p .cartesi/
-cartesi-machine --env=ROLLUP_HTTP_SERVER_URL=http://127.0.0.1:5004 --flash-drive=label:root,filename:rootfs.ext2 --store=.cartesi/image --assert-rolling-template -- rollup-init /opt/cartesi/app/app
+cartesi-machine --env=ROLLUP_HTTP_SERVER_URL=http://127.0.0.1:5004 --flash-drive=label:root,filename:root.ext2 --store=.cartesi/image --assert-rolling-template -- rollup-init /opt/cartesi/app/app
 ```
 
 The starting snapshot was saved to `.cartesi/image` directory. This snapshot is copied to your the node to be able to run the application.

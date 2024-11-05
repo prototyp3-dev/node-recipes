@@ -58,8 +58,9 @@ services:
       - snapshots:/mnt/snapshots
     networks:
       - devnet
-    ports:
-      - "10000:10000" # Supervisor
+    # ports:
+    #   - "10000:10000" # Supervisor
+    #   - "3333:3333" # Input Reader
     environment:
       <<: *env
     env_file:
@@ -78,8 +79,8 @@ services:
         condition: service_healthy
     networks:
       - devnet
-    ports:
-      - "10004:10004"
+    # ports:
+    #   - "10004:10004"
     environment:
       <<: *env
       GRAPHQL_PORT: 10004
@@ -88,6 +89,64 @@ services:
       POSTGRES_DB: "hlgraphql"
     env_file:
      - ${ENVFILENAME}
+
+  proxy:
+    image: traefik:3.2.0
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        mkdir -p /etc/traefik
+        echo '
+        ping: {}
+        log:
+          level: INFO
+        entryPoints:
+          web:
+            address: ":80"
+            asDefault: true
+        providers:
+          file:
+            filename: /etc/traefik/file_conf.yaml
+        accessLog: {}
+        ' > /etc/traefik/traefik.yaml
+        echo '
+        http:
+          routers:
+            inspect-router:
+              rule: "PathPrefix(`/inspect`)"
+              service: inspect-service
+            graphql-router:
+              rule: "PathPrefix(`/graphql`)"
+              service: graphql-service
+            input-reader-router:
+              rule: "PathPrefix(`/nonce`) || PathPrefix(`/submit`)"
+              service: input-reader-service
+          services:
+            inspect-service:
+              loadBalancer:
+                servers:
+                  - url: "http://node:10000/inspect"
+            graphql-service:
+              loadBalancer:
+                servers:
+                  - url: "http://graphql:10004/graphql"
+            input-reader-service:
+              loadBalancer:
+                servers:
+                  - url: "http://node:10030/"
+                    preservePath: true
+        ' > /etc/traefik/file_conf.yaml
+        exec /entrypoint.sh traefik
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null 'http://127.0.0.1:8080/ping'"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+    networks:
+      - devnet
+    ports:
+      - "8080:80"
 
 volumes:
   node_data:
