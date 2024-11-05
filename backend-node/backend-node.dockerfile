@@ -98,6 +98,7 @@ COPY --from=telegraf-conf /etc/s6-overlay/s6-rc.d/telegraf /etc/s6-overlay/s6-rc
     
 # Env variables
 ENV CARTESI_HTTP_PORT=10000
+ENV ESPRESSO_SERVICE_ENDPOINT=0.0.0.0:10030
 
 # set Services
 RUN <<EOF
