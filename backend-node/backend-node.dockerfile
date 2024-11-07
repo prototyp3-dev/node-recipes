@@ -6,7 +6,7 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG NONODO_VERSION=2.11.4-beta
+ARG NONODO_VERSION=2.13.1-beta
 
 # =============================================================================
 # STAGE: telegraf conf

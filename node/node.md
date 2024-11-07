@@ -76,7 +76,7 @@ make -f node.mk stop-localhost
 
 ## Testnet
 
-Create an .env.<testnet> file with:
+Create a .env.<testnet> file with:
 
 ```shell
 CARTESI_LOG_LEVEL=info

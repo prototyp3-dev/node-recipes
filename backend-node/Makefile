@@ -21,7 +21,7 @@ node-image: --check-envs
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
 
-hlgraphql-image: --check-envs
+hlgraphql-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-hlgraphql:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .hlgraphql.tag
@@ -52,3 +52,30 @@ devnet-image: --check-envs
 --check-envs:
 	@test ! -z '${NODE_REPO_PATH}' || (echo "Must define NODE_REPO_PATH" && exit 1)
 
+nonode-image:
+	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
+	IMAGE_TAG=ghcr.io/prototyp3-dev/test-nonode:$$IMAGE_VERSION
+	echo $$IMAGE_TAG > .nonode.tag
+	docker build -f nonode.dockerfile --target nonode . \
+		-t $$IMAGE_TAG \
+		--label "org.opencontainers.image.title=prototyp3-dev-test-nonode" \
+		--label "org.opencontainers.image.description=Test Nonode" \
+		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes" \
+		--label "org.opencontainers.image.created=$$(date -Iseconds --utc)" \
+		--label "org.opencontainers.image.licenses=Apache-2.0" \
+		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
+		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
+
+nonode-cloud-image:
+	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
+	IMAGE_TAG=ghcr.io/prototyp3-dev/test-nonode-cloud:$$IMAGE_VERSION
+	echo $$IMAGE_TAG > .nonode-cloud.tag
+	docker build -f nonode.dockerfile --target nonode-cloud . \
+		-t $$IMAGE_TAG \
+		--label "org.opencontainers.image.title=prototyp3-dev-test-nonode-cloud" \
+		--label "org.opencontainers.image.description=Test Nonode Cloud" \
+		--label "org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes" \
+		--label "org.opencontainers.image.created=$$(date -Iseconds --utc)" \
+		--label "org.opencontainers.image.licenses=Apache-2.0" \
+		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
+		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
