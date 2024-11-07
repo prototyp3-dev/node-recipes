@@ -77,7 +77,7 @@ CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
 Also create a `app-nonode.dockerfile` that creates an image containing your project (we'll assume you have a rootfs in `$PWD/.cartesi/root.ext2`)
 
 ```Dockerfile
-FROM ghcr.io/prototyp3-dev/test-nonode:latest
+FROM ghcr.io/prototyp3-dev/test-nonode-cloud:latest
 COPY . /opt/cartesi/app
 COPY .cartesi/root.ext2 /opt/cartesi/image/root.ext2
 ```
