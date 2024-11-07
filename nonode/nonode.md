@@ -1,6 +1,6 @@
 # Test Node with Nonodo
 
-Instructions to run a cartesi rollups node
+Instructions to run a cartesi rollups node with nonodo
 
 Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to start a local node with a devnet, [Testnet](#testnet) to start local node using a testnet, [Fly](#fly) for instructions to deploy a node on [Fly](https://fly.io/docs).
 
@@ -9,11 +9,11 @@ Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to 
 To run the application inside the image, it requires a `entrypoint.sh` file. So make sure you generate it so it can run your application. Example `entrypoint.sh` file (considering the project is a single `app` binary):
 
 ```shell
-#bin/bash
+#!/bin/bash
 ./app
 ```
 
-You should also generate a valid rootfs to use as the root file system of the cartesi machine (you can follow [these instructions](node/node.md#prepare-the-snapshot))
+You should also generate a valid rootfs to use as the root file system of the cartesi machine (you can follow [these instructions](/node/node.md#prepare-the-snapshot))
 
 Also, make sure you have the updated base nonode image:
 
@@ -41,7 +41,7 @@ FROM_BLOCK=
 RPC_URL=
 APP_ADDRESS=
 ESPRESSO_STARTING_BLOCK=
-ESPRESSO_NAMESPACE=10008
+ESPRESSO_NAMESPACE=51025
 ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network
 CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
 CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
@@ -74,15 +74,13 @@ CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
 CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
 ```
 
-You should create a `app-nonode.dockerfile` that creates image containing your project (we'll assume you have a rootfs in `$PWD/.cartesi/root.ext2`)
+Also create a `app-nonode.dockerfile` that creates an image containing your project (we'll assume you have a rootfs in `$PWD/.cartesi/root.ext2`)
 
 ```Dockerfile
 FROM ghcr.io/prototyp3-dev/test-nonode:latest
 COPY . /opt/cartesi/app
 COPY .cartesi/root.ext2 /opt/cartesi/image/root.ext2
 ```
-
-We suggest creating a .dockerignore file to avoid unnecessary files on the image.
 
 Then follow these steps to deploy on fly
 
@@ -113,6 +111,8 @@ mkdir -p .fly/nonode
   cpus = 1
 ```
 
+We suggest creating a .dockerignore file to avoid unnecessary files on the image and defining `ignorefile = "../../.dockerignore"` on the `[build]` section.
+
 **Step 3**: Create the Fly app without deploying yet
 
 ```shell
@@ -130,3 +130,5 @@ fly secrets import -c .fly/nonode/fly.toml < .env.<testnet>
 ```shell
 fly deploy --ha=false -c .fly/nonode/fly.toml
 ```
+
+Now you have a rollups node with nonodo running on the provided url.
