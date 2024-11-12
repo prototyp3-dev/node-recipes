@@ -32,7 +32,7 @@ services:
       POSTGRES_DB: rollupsdb
 
   node:
-    image: ghcr.io/prototyp3-dev/test-node-cloud:devel
+    image: ghcr.io/prototyp3-dev/test-node:latest
     command: /init
     healthcheck:
       test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${CARTESI_HTTP_PORT}/healthz"]
