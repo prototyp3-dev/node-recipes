@@ -103,7 +103,11 @@ mkdir -p .fly/nonode
   auto_start_machines = false
   min_machines_running = 1
   processes = ['app']
- 
+
+[metrics]
+  port = 9000
+  path = "/metrics"
+
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '1gb'

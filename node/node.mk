@@ -19,17 +19,6 @@ run-database-%: ${ENVFILE}.% -%
 run-node-%: ${ENVFILE}.% -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d node
 
-run-proxy-%: ${ENVFILE}.% -%
-	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d proxy
-
-create-db-%: ${ENVFILE}.% -%
-	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec database \
-	 /bin/bash -c 'PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -c \
-	 "create database $${GRAPHQL_DB};"'
-
-run-graphql-%: ${ENVFILE}.% -%
-	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d graphql
-
 stop-%: ${ENVFILE}.% -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml down --remove-orphans -v
 

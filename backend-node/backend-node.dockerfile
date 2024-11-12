@@ -6,16 +6,44 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG NONODO_VERSION=2.14.0-beta
+ARG NONODO_VERSION=2.14.1-beta
+ARG TRAEFIK_VERSION=3.2.0
 
 # =============================================================================
-# STAGE: telegraf conf
+# STAGE: base-rollups-node-we
 #
 # =============================================================================
 
-FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS telegraf-conf
+FROM recipe-stage/rollups-node AS base-rollups-node-we
 
 USER root
+
+# Download system dependencies required at runtime.
+ARG DEBIAN_FRONTEND=noninteractive
+RUN <<EOF
+    set -e
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        xz-utils nginx postgresql-client
+    rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
+EOF
+
+# install s6 overlay
+ARG S6_OVERLAY_VERSION
+RUN curl -s -L https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz | \
+    tar xJf - -C / 
+RUN curl -s -L https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-$(uname -m).tar.xz | \
+    tar xJf - -C / 
+
+# install telegraf
+ARG TELEGRAF_VERSION
+RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_$(dpkg --print-architecture).tar.gz | \
+    tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
+
+# install nonodo
+ARG NONODO_VERSION
+RUN curl -s -L https://github.com/Calindra/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+    tar xzf - -C /usr/local/bin nonodo
 
 # configure telegraf
 RUN <<EOF
@@ -39,7 +67,7 @@ echo "
 
 [[inputs.procstat.filter]]
     name = 'rollups-node'
-    process_names = ['cartesi-rollups-*', 'jsonrpc-remote-cartesi-*', '*cartesi*', 'telegraf']
+    process_names = ['cartesi-rollups-*', 'jsonrpc-remote-cartesi-*', '*cartesi*', 'telegraf', 'nonodo', 'traefik']
 
 [[outputs.prometheus_client]]
     listen = ':9000'
@@ -47,7 +75,7 @@ echo "
 " > /etc/telegraf/telegraf.conf
 EOF
 
-# set Services
+# Configure s6 Telegraf
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/telegraf
 echo "longrun" > /etc/s6-overlay/s6-rc.d/telegraf/type
@@ -62,45 +90,78 @@ fdmove -c 2 1
 " > /etc/s6-overlay/s6-rc.d/telegraf/run
 EOF
 
-# =============================================================================
-# STAGE: base-rollups-node-we
-#
-# =============================================================================
-
-FROM recipe-stage/rollups-node AS base-rollups-node-we
-
-USER root
-
-# Download system dependencies required at runtime.
-ARG DEBIAN_FRONTEND=noninteractive
+# Configure nginx
 RUN <<EOF
-    set -e
-    apt-get update
-    apt-get install -y --no-install-recommends \
-        xz-utils
-    rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
+mkdir -p /var/log/nginx/
+chown -R cartesi:cartesi /var/log/nginx/
+mkdir -p /var/cache
+chown -R cartesi:cartesi /var/cache
+chown -R cartesi:cartesi /var/lib/nginx
+echo "
+user cartesi;
+worker_processes  auto;
+
+error_log  /var/log/nginx/error.log notice;
+pid        /var/run/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $upstream_cache_status rt=$request_time [$time_local] \"$request\" '
+                      '$status $body_bytes_sent \"$http_referer\" '
+                      '\"$http_user_agent\" \"$http_x_forwarded_for\" '
+                      'uct=\"$upstream_connect_time\" uht=\"$upstream_header_time\" urt=\"$upstream_response_time\"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  65;
+
+    #gzip  on;
+
+    map \$request_method \$purge_method {
+        PURGE 1;
+        default 0;
+    }
+
+    proxy_cache_path /var/cache keys_zone=mycache:200m;
+
+    include /etc/nginx/sites-enabled/*;
+}
+" > /etc/nginx/nginx.conf
+rm /etc/nginx/sites-enabled/*
 EOF
 
-# install s6 overlay
-ARG S6_OVERLAY_VERSION
-RUN curl -s -L https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz | \
-    tar xJf - -C / 
-RUN curl -s -L https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-$(uname -m).tar.xz | \
-    tar xJf - -C / 
+# Configure s6 nginx
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/nginx
+echo "longrun" > /etc/s6-overlay/s6-rc.d/nginx/type
+echo "#!/command/execlineb -P
+pipeline -w { sed --unbuffered \"s/^/nginx: /\" }
+fdmove -c 2 1
+/usr/sbin/nginx -g \"daemon off;\"
+" > /etc/s6-overlay/s6-rc.d/nginx/run
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/nginx
+EOF
 
-# install telegraf
-ARG TELEGRAF_VERSION
-RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_$(dpkg --print-architecture).tar.gz | \
-    tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
-
-COPY --from=telegraf-conf /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.conf
-COPY --from=telegraf-conf /etc/s6-overlay/s6-rc.d/telegraf /etc/s6-overlay/s6-rc.d/telegraf
-    
 # Env variables
-ENV CARTESI_HTTP_PORT=10000
-ENV ESPRESSO_SERVICE_ENDPOINT=0.0.0.0:10030
+ARG CARTESI_HTTP_PORT=10000
+ENV CARTESI_HTTP_PORT=${CARTESI_HTTP_PORT}
+ARG ESPRESSO_SERVICE_PORT=10030
+ENV ESPRESSO_SERVICE_PORT=${ESPRESSO_SERVICE_PORT}
+ARG ESPRESSO_SERVICE_ENDPOINT=localhost:${ESPRESSO_SERVICE_PORT}
+ENV ESPRESSO_SERVICE_ENDPOINT=${ESPRESSO_SERVICE_ENDPOINT}
+ARG GRAPHQL_PORT=10004
+ENV GRAPHQL_PORT=${GRAPHQL_PORT}
 
-# set Services
+# Configure s6 migrate
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/migrate
 echo "oneshot" > /etc/s6-overlay/s6-rc.d/migrate/type
@@ -110,16 +171,67 @@ cartesi-rollups-cli db upgrade -p \${CARTESI_POSTGRES_ENDPOINT}
 chmod +x /etc/s6-overlay/s6-rc.d/migrate/run.sh
 echo "/etc/s6-overlay/s6-rc.d/migrate/run.sh" \
 > /etc/s6-overlay/s6-rc.d/migrate/up
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate
+EOF
+
+# Configure s6 migrate
+RUN <<EOF
+touch /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d/migrate
+mkdir -p /etc/s6-overlay/s6-rc.d/createhlgdb
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/createhlgdb/type
+echo "#!/command/with-contenv sh
+PGPASSWORD=\${POSTGRES_PASSWORD} psql -U \${POSTGRES_USER} -h \${POSTGRES_HOST} \
+    -c \"create database \${GRAPHQL_DB};\" || echo 0
+" > /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
+chmod +x /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
+echo "/etc/s6-overlay/s6-rc.d/createhlgdb/run.sh" \
+> /etc/s6-overlay/s6-rc.d/createhlgdb/up
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/createhlgdb
+EOF
+
+# Configure s6 node
+RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/node/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/advance/node/migrate
+touch /etc/s6-overlay/s6-rc.d/node/dependencies.d/migrate
 echo "longrun" > /etc/s6-overlay/s6-rc.d/node/type
 echo "#!/command/with-contenv sh
 cartesi-rollups-node
+" > /etc/s6-overlay/s6-rc.d/node/start.sh
+echo "#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered \"s/^/node: /\" }
+fdmove -c 2 1
+/bin/sh /etc/s6-overlay/s6-rc.d/node/start.sh
 " > /etc/s6-overlay/s6-rc.d/node/run
 mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate \
-    /etc/s6-overlay/s6-rc.d/user/contents.d/node \
-    /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/node
+EOF
+
+# Configure s6 hlgraphql
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/createhlgdb
+echo "longrun" > /etc/s6-overlay/s6-rc.d/hlgraphql/type
+echo "#!/command/with-contenv sh
+POSTGRES_DB=\${GRAPHQL_DB} nonodo \
+    --disable-devnet \
+    --disable-advance \
+    --disable-inspect \
+    --http-port=\${GRAPHQL_PORT} \
+    --raw-enabled \
+    --high-level-graphql \
+    --graphile-disable-sync \
+    --db-implementation=postgres \
+    --db-raw-url=\${CARTESI_POSTGRES_ENDPOINT}
+" > /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
+echo "#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered \"s/^/hlgraphql: /\" }
+fdmove -c 2 1
+/bin/sh /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
+" > /etc/s6-overlay/s6-rc.d/hlgraphql/run
+mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/hlgraphql
 EOF
 
 # deploy script
@@ -165,88 +277,124 @@ chmod +x /register.sh
 EOF
 
 # =============================================================================
-# STAGE: hlgraphql
-#
-# =============================================================================
-
-FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS hlgraphql
-
-USER root
-
-ARG DEBIAN_FRONTEND=noninteractive
-RUN <<EOF
-    set -e
-    apt-get update
-    apt-get install -y --no-install-recommends wget ca-certificates xz-utils
-    rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
-EOF
-
-ARG NONODO_VERSION
-RUN wget -qO- https://github.com/Calindra/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
-    tar xzf - -C /usr/local/bin nonodo
-
-# install s6 overlay
-ARG S6_OVERLAY_VERSION
-RUN wget -qO- https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz | \
-    tar xJf - -C / 
-RUN wget -qO- https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-$(uname -m).tar.xz | \
-    tar xJf - -C / 
-
-# install telegraf
-ARG TELEGRAF_VERSION
-RUN wget -qO- wget https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_$(dpkg --print-architecture).tar.gz | \
-    tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
-
-COPY --from=telegraf-conf /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.conf
-COPY --from=telegraf-conf /etc/s6-overlay/s6-rc.d/telegraf /etc/s6-overlay/s6-rc.d/telegraf
-
-# set Services
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/nonodo
-echo "longrun" > /etc/s6-overlay/s6-rc.d/nonodo/type
-echo "#!/command/with-contenv sh
-nonodo \
-    --disable-devnet \
-    --disable-advance \
-    --disable-inspect \
-    --http-address=0.0.0.0 \
-    --http-port=\${GRAPHQL_PORT} \
-    --raw-enabled \
-    --high-level-graphql \
-    --graphile-disable-sync \
-    --db-implementation=postgres \
-    --db-raw-url=\${CARTESI_POSTGRES_ENDPOINT}
-" > /etc/s6-overlay/s6-rc.d/nonodo/run
-mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf \
-    /etc/s6-overlay/s6-rc.d/user/contents.d/nonodo
-EOF
-
-HEALTHCHECK --interval=1s --timeout=1s --retries=5 \
-    CMD curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:${CARTESI_HTTP_PORT}/healthz
-
-# Set user to low-privilege.
-USER cartesi
-
-# Set the Go supervisor as the command.
-CMD [ "/init" ]
-
-# =============================================================================
 # STAGE: rollups-node-we
 #
 # =============================================================================
 
+FROM base-rollups-node-we AS rollups-node-we-cloud
+
+RUN touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
+
+# Configure nginx server with cache
+RUN <<EOF
+echo "
+server {
+    listen       80;
+    listen  [::]:80;
+
+    proxy_cache mycache;
+
+    location /graphql {
+        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
+    }
+
+    location /nonce {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
+    }
+
+    location /submit {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
+    }
+
+    location /inspect {
+        proxy_pass   http://localhost:${CARTESI_HTTP_PORT}/inspect;
+        proxy_cache_valid 200 5s;
+        proxy_cache_background_update on;
+        proxy_cache_use_stale error timeout updating http_500 http_502
+                              http_503 http_504;
+        proxy_cache_lock on;
+
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+" > /etc/nginx/sites-available/cloud.conf
+ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
+EOF
+
+# Create init wrapper
+RUN <<EOF
+echo '#!/bin/sh
+# run /init with PID 1, creating a new PID namespace if necessary
+if [ "$$" -eq 1 ]; then
+    # we already have PID 1
+    exec /init "$@"
+else
+    # create a new PID namespace
+    exec unshare --pid sh -c '"'"'
+        # set up /proc and start the real init in the background
+        unshare --mount-proc /init "$@" &
+        child="$!"
+        # forward signals to the real init
+        trap "kill -INT \$child" INT
+        trap "kill -TERM \$child" TERM
+        # wait until the real init exits
+        # ("wait" returns early on signals; "kill -0" checks if the process exists)
+        until wait "$child" || ! kill -0 "$child" 2>/dev/null; do :; done
+    '"'"' sh "$@"
+fi
+' > /init-wrapper
+chmod +x /init-wrapper
+EOF
+
+CMD ["/init-wrapper"]
+
+
 FROM base-rollups-node-we AS rollups-node-we
+
+RUN chown -R cartesi:cartesi /run
+
+# Configure nginx server with cache
+RUN <<EOF
+echo "
+server {
+    listen       80;
+    listen  [::]:80;
+
+    location /graphql {
+        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
+    }
+
+    location /nonce {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
+    }
+
+    location /submit {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
+    }
+
+    location /inspect {
+        proxy_pass   http://localhost:${CARTESI_HTTP_PORT}/inspect;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+" > /etc/nginx/sites-available/node.conf
+ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
+EOF
 
 # Set user to low-privilege.
 USER cartesi
 
-HEALTHCHECK --interval=1s --timeout=1s --retries=5 \
-    CMD wget -qO /dev/null --header='Content-Type: application/json' \
-    --post-data='{"query":"{ inputs(last:1) { edges { node { id } } } }"}' \
-    'http://127.0.0.1:10004/graphql'
-
 # Set the Go supervisor as the command.
 CMD [ "/init" ]
-
 

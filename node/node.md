@@ -18,7 +18,6 @@ Also, make sure you have the updated test node images:
 
 ```shell
 docker pull ghcr.io/prototyp3-dev/test-node:latest
-docker pull ghcr.io/prototyp3-dev/test-hlgraphql:latest
 ```
 
 And if you will run a local devnet:
@@ -29,35 +28,12 @@ docker pull ghcr.io/prototyp3-dev/test-devnet:latest
 
 ## Localhost
 
-You can start running devnet and database
+You can start services
 
 ```shell
 make -f node.mk run-devnet-localhost
 make -f node.mk run-database-localhost
-```
-
-Start the node
-
-```shell
 make -f node.mk run-node-localhost
-```
-
-Create the graphql database 
-
-```shell
-make -f node.mk create-db-localhost
-```
-
-And finally, run the graphql server
-
-```shell
-make -f node.mk run-graphql-localhost
-```
-
-Run the reverse proxy so you can access all services via a single entry point
-
-```shell
-make -f node.mk run-proxy-localhost
 ```
 
 With the infrastructure running, you can deploy the application with
@@ -92,28 +68,11 @@ CARTESI_BLOCKCHAIN_ID=
 CARTESI_AUTH_PRIVATE_KEY=
 ```
 
-Then start the database:
+Then start the database and node:
 
 ```shell
 make -f node.mk run-database-<testnet>
-```
-
-Start the node:
-
-```shell
 make -f node.mk run-node-<testnet>
-```
-Start the reverse proxy:
-
-```shell
-make -f node.mk run-proxy-<testnet>
-```
-
-Create the graphql database and the graphql service
-
-```shell
-make -f node.mk create-db-<testnet>
-make -f node.mk run-graphql-<testnet>
 ```
 
 And deploy the application with (optionally set `IMAGE_PATH`):
