@@ -9,7 +9,7 @@ node-image: --check-envs
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node.tag
-	docker build -t recipe-stage/rollups-node ${NODE_REPO_PATH}
+	docker build -t recipe-stage/builder --target go-builder ${NODE_REPO_PATH}
 	docker build -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node" \
@@ -24,7 +24,7 @@ node-cloud-image: --check-envs
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node-cloud:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node-cloud.tag
-	docker build -t recipe-stage/rollups-node ${NODE_REPO_PATH}
+	docker build -t recipe-stage/builder --target go-builder ${NODE_REPO_PATH}
 	docker build -f backend-node.dockerfile --target rollups-node-we-cloud ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node-cloud" \

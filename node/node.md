@@ -81,7 +81,7 @@ And deploy the application with (optionally set `IMAGE_PATH`):
 make -f node.mk deploy-<testnet> OWNER=<app and auth owner>
 ```
 
-You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`.Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
 
 To stop the environment just run:
 
@@ -97,6 +97,137 @@ make -f node.mk register-<testnet> APPLICATION_ADDRESS=<app address> AUTHORITY_A
 
 ## Deploy backend to fly.io
 
+Go to the directory containing your project. You should create a `.env.<testnet>` file with:
+
+```shell
+CARTESI_LOG_LEVEL=info
+CARTESI_AUTH_KIND=private_key
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
+CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
+MAIN_SEQUENCER=espresso
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
+ESPRESSO_NAMESPACE=51025
+GRAPHQL_DB=hlgraphql
+ESPRESSO_STARTING_BLOCK=
+CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
+CARTESI_BLOCKCHAIN_WS_ENDPOINT=
+CARTESI_BLOCKCHAIN_ID=
+CARTESI_AUTH_PRIVATE_KEY=
+CARTESI_POSTGRES_ENDPOINT=
+POSTGRES_HOST=
+POSTGRES_PASSWORD=
+POSTGRES_USER=
+POSTGRES_PORT=
+```
+
+Then follow these steps to deploy on fly
+
+**Step 1**: Create a directory for the fly app and cd into it
+
+```shell
+mkdir -p .fly/node
+```
+
+**Step 2**: Create the base fly configuration for the node. This is important to control the auto-stop behavior and minimum machines running. Create a `.fly/node/fly.toml` in this directory with the following content:
+
+```toml
+[build]
+  image = "ghcr.io/prototyp3-dev/test-node-cloud:latest"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = false
+  min_machines_running = 1
+  processes = ['app']
+
+[metrics]
+  port = 9000
+  path = "/metrics"
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+```
+
+We suggest creating a persistent volume to store the snapshots, so you wouldn't need to transfer the snapshots when restarting the virtual machine. Create the `<node-volume>` volume and add this section to the `.fly/node/fly.toml` file:
+
+```toml
+[[mounts]]
+  source = '<nodevolume>'
+  destination = '/mnt'
+  initial_size = '5gb'
+```
+
+**Step 3**: Create the Postgres database under your organization
+
+```shell
+flyctl ext supabase create
+```
+
+Make sure to add the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables to your environment file.
+
+**Step 4**: Create the Fly app without deploying yet
+
+```shell
+fly launch --name <app-name> --copy-config --no-deploy -c .fly/node/fly.toml
+```
+
+**Step 5**: Import the secrets from the .env file
+
+```shell
+fly secrets import -c .fly/node/fly.toml < .env.<testnet>
+```
+
+**Step 6**: Deploy the backend node
+
+```shell
+fly deploy --ha=false -c .fly/node/fly.toml
+```
+
+Now you have a rollups node with nonodo running on the provided url.
+
+**Step 7**: Deploy the app to the node
+
+You'll have to copy the snapshot using sftp shell (we are considering the application snapshot is at .cartesi.image). 
+
+```shell
+app_name=<app-name>
+image_path=.cartesi/image
+
+fly ssh console -c .fly/node/fly.toml -C "mkdir -p /mnt/apps/$app_name"
+```
+
+Then run this command to print all transfers:
+
+```shell
+for f in $(ls -d $image_path/*); do echo "put $f /mnt/apps/$app_name"/$(basename $f); done
+```
+
+Then run the sftp shell and paste the listed transfers:
+
+```shell
+fly sftp shell -c .fly/node/fly.toml
+```
+
+Finally, run the deployment on the node: 
+
+```shell
+fly ssh console -c .fly/node/fly.toml -C "bash -c 'OWNER={OWNER} /deploy.sh /mnt/apps/$app_name'"
+```
+
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
+
+If you have already deployed the application, you can register it to add to the node (after transfering the image).
+
+```shell
+fly ssh console -c .fly/node/fly.toml -C "bash -c 'APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} /register.sh /mnt/apps/$app_name'"
+```
+
+Your application is now deployed on the node. Also note that you can deploy multiple applications on the same node.
 
 ## Prepare the Snapshot
 

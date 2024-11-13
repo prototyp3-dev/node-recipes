@@ -120,7 +120,7 @@ We suggest creating a .dockerignore file to avoid unnecessary files on the image
 **Step 3**: Create the Fly app without deploying yet
 
 ```shell
-fly launch --name app-nonode --copy-config --no-deploy -c .fly/nonode/fly.toml
+fly launch --name <app-name> --copy-config --no-deploy -c .fly/nonode/fly.toml
 ```
 
 **Step 4**: Import the secrets from the .env file

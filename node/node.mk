@@ -28,17 +28,17 @@ compose-%: ${ENVFILE}.% -%
 hash = $(eval hash := $(shell hexdump -e '1/1 "%.2x"' ${IMAGE_PATH}/hash))$(value hash)
 
 deploy-%: ${ENVFILE}.% --check-envs -%
-	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/snapshots/${hash}
-	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec -u root node bash -c "chown -R cartesi:cartesi /mnt/snapshots/${hash}"
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/apps/${hash}
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec -u root node bash -c "chown -R cartesi:cartesi /mnt/apps/${hash}"
 	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
 	 "OWNER=${OWNER} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EPOCH_LENGTH=${EPOCH_LENGTH} SALT=${SALT} EXTRA_ARGS=${EXTRA_ARGS} \
-	 /deploy.sh /mnt/snapshots/${hash}"
+	 /deploy.sh /mnt/apps/${hash}"
 
 register-%: ${ENVFILE}.% --check-envs -%
-	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/snapshots/${hash}
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/apps/${hash}
 	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
 	 "APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EXTRA_ARGS=${EXTRA_ARGS} \
-	 /register.sh /mnt/snapshots/${hash}"
+	 /register.sh /mnt/apps/${hash}"
 
 ${ENVFILE}.localhost:
 	@test ! -f $@ && echo "$@ not found. Creating with default values"

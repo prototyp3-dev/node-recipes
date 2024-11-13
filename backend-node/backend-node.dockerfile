@@ -8,15 +8,37 @@ ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
 ARG NONODO_VERSION=2.14.1-beta
 ARG TRAEFIK_VERSION=3.2.0
+ARG GO_BUILD_PATH=/build/cartesi/go
+
+# =============================================================================
+# STAGE: node builder
+#
+# =============================================================================
+
+FROM recipe-stage/builder AS go-builder
+
+ARG GO_BUILD_PATH
+
+# Remove postgraphile migration
+RUN rm ${GO_BUILD_PATH}/rollups-node/internal/repository/schema/migrations/000002_create_postgraphile_view*
+RUN sed -i -e 's/const ExpectedVersion uint = 2/const ExpectedVersion uint = 1/' ${GO_BUILD_PATH}/rollups-node/internal/repository/schema/schema.go
+
+RUN cd ${GO_BUILD_PATH}/rollups-node && make build-go
 
 # =============================================================================
 # STAGE: base-rollups-node-we
 #
 # =============================================================================
 
-FROM recipe-stage/rollups-node AS base-rollups-node-we
+FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS base-rollups-node-we
 
 USER root
+
+ARG BASE_PATH=/mnt
+ENV BASE_PATH=${BASE_PATH}
+
+ENV SNAPSHOTS_APPS_PATH=${BASE_PATH}/apps
+ENV NODE_PATH=${BASE_PATH}/node
 
 # Download system dependencies required at runtime.
 ARG DEBIAN_FRONTEND=noninteractive
@@ -24,9 +46,16 @@ RUN <<EOF
     set -e
     apt-get update
     apt-get install -y --no-install-recommends \
+        ca-certificates curl procps \
         xz-utils nginx postgresql-client
     rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
+    mkdir -p ${NODE_PATH}/snapshots ${NODE_PATH}/data
+    chown -R cartesi:cartesi ${NODE_PATH}
 EOF
+
+# Copy Go binary.
+ARG GO_BUILD_PATH
+COPY --from=go-builder ${GO_BUILD_PATH}/rollups-node/cartesi-rollups-* /usr/bin
 
 # install s6 overlay
 ARG S6_OVERLAY_VERSION
@@ -160,6 +189,23 @@ ARG ESPRESSO_SERVICE_ENDPOINT=localhost:${ESPRESSO_SERVICE_PORT}
 ENV ESPRESSO_SERVICE_ENDPOINT=${ESPRESSO_SERVICE_ENDPOINT}
 ARG GRAPHQL_PORT=10004
 ENV GRAPHQL_PORT=${GRAPHQL_PORT}
+ENV CARTESI_SNAPSHOT_DIR=${NODE_PATH}/snapshots
+
+# Configure s6 create dir
+RUN <<EOF
+mkdir -p ${BASE_PATH}
+chown -R cartesi:cartesi ${BASE_PATH}
+mkdir -p /etc/s6-overlay/s6-rc.d/prepare-dirs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/prepare-dirs/type
+echo "#!/command/with-contenv sh
+mkdir -p \${SNAPSHOTS_APPS_PATH}
+mkdir -p \${NODE_PATH}/snapshots
+mkdir -p \${NODE_PATH}/data
+" > /etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
+chmod +x /etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
+echo "/etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh" \
+> /etc/s6-overlay/s6-rc.d/prepare-dirs/up
+EOF
 
 # Configure s6 migrate
 RUN <<EOF
@@ -181,7 +227,7 @@ mkdir -p /etc/s6-overlay/s6-rc.d/createhlgdb
 echo "oneshot" > /etc/s6-overlay/s6-rc.d/createhlgdb/type
 echo "#!/command/with-contenv sh
 PGPASSWORD=\${POSTGRES_PASSWORD} psql -U \${POSTGRES_USER} -h \${POSTGRES_HOST} \
-    -c \"create database \${GRAPHQL_DB};\" || echo 0
+    -c \"create database \${GRAPHQL_DB};\" || echo \"HLGraphql database alredy created\"
 " > /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
 chmod +x /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
 echo "/etc/s6-overlay/s6-rc.d/createhlgdb/run.sh" \
@@ -192,7 +238,8 @@ EOF
 # Configure s6 node
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/node/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/node/dependencies.d/migrate
+touch /etc/s6-overlay/s6-rc.d/node/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/node/dependencies.d/migrate
 echo "longrun" > /etc/s6-overlay/s6-rc.d/node/type
 echo "#!/command/with-contenv sh
 cartesi-rollups-node
