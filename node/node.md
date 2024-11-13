@@ -120,6 +120,8 @@ POSTGRES_USER=
 POSTGRES_PORT=
 ```
 
+Note that the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` will be provided on the Step 3.
+
 Then follow these steps to deploy on fly
 
 **Step 1**: Create a directory for the fly app and cd into it
@@ -162,7 +164,7 @@ We suggest creating a persistent volume to store the snapshots, so you wouldn't 
   initial_size = '5gb'
 ```
 
-**Step 3**: Create the Postgres database under your organization
+**Step 3**: Create the Postgres database
 
 ```shell
 flyctl ext supabase create
@@ -188,11 +190,11 @@ fly secrets import -c .fly/node/fly.toml < .env.<testnet>
 fly deploy --ha=false -c .fly/node/fly.toml
 ```
 
-Now you have a rollups node with nonodo running on the provided url.
+Now you have a rollups node with the node running on the provided url.
 
 **Step 7**: Deploy the app to the node
 
-You'll have to copy the snapshot using sftp shell (we are considering the application snapshot is at .cartesi.image). 
+You'll have to copy the snapshot using sftp shell (we are considering the application snapshot is at `.cartesi/image`). 
 
 ```shell
 app_name=<app-name>
