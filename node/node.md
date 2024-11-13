@@ -149,10 +149,10 @@ mkdir -p .fly/node
   path = "/metrics"
 
 [[vm]]
-  size = 'shared-cpu-1x'
-  memory = '1gb'
+  size = 'shared-cpu-2x'
+  memory = '4gb'
   cpu_kind = 'shared'
-  cpus = 1
+  cpus = 2
 ```
 
 We suggest creating a persistent volume to store the snapshots, so you wouldn't need to transfer the snapshots when restarting the virtual machine. Create the `<node-volume>` volume and add this section to the `.fly/node/fly.toml` file:
