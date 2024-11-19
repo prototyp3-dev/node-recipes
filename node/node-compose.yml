@@ -44,6 +44,7 @@ services:
     volumes:
       - node_data:/var/lib/cartesi-rollups-node/data
       - snapshots:/mnt/snapshots
+      - apps:/mnt/apps
     networks:
       - devnet
     ports:
@@ -59,6 +60,7 @@ services:
 volumes:
   node_data:
   snapshots:
+  apps:
 
 networks:
   devnet:

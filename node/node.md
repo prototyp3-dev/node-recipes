@@ -172,6 +172,18 @@ flyctl ext supabase create
 
 Make sure to add the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables to your environment file.
 
+You can also use the `fly postgres` to create the database:
+
+```shell
+flyctl database create
+```
+
+Similarly, make sure to set the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
+
+```shell
+postgres://{username}:{password}@{hostname}:{port}/postgres?sslmode=disable
+```
+
 **Step 4**: Create the Fly app without deploying yet
 
 ```shell
