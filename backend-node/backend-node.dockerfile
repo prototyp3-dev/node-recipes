@@ -296,17 +296,12 @@ touch /etc/s6-overlay/s6-rc.d/user/contents.d/advancer
 echo "longrun" > /etc/s6-overlay/s6-rc.d/advancer/type
 EOF
 
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/advancer/start.sh
-#!/command/with-contenv sh
-cartesi-rollups-advancer
-EOF
-
 COPY <<EOF /etc/s6-overlay/s6-rc.d/advancer/run
 #!/command/execlineb -P
 with-contenv
 pipeline -w { sed --unbuffered "s/^/advancer: /" }
 fdmove -c 2 1
-/bin/sh /etc/s6-overlay/s6-rc.d/advancer/start.sh
+cartesi-rollups-advancer
 EOF
 
 ################################################################################
@@ -318,17 +313,12 @@ touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
 echo "longrun" > /etc/s6-overlay/s6-rc.d/validator/type
 EOF
 
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/validator/start.sh
-#!/command/with-contenv sh
-cartesi-rollups-validator
-EOF
-
 COPY <<EOF /etc/s6-overlay/s6-rc.d/validator/run
 #!/command/execlineb -P
 with-contenv
 pipeline -w { sed --unbuffered "s/^/validator: /" }
 fdmove -c 2 1
-/bin/sh /etc/s6-overlay/s6-rc.d/validator/start.sh
+cartesi-rollups-validator
 EOF
 
 ################################################################################
@@ -339,17 +329,12 @@ touch /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/{prepare-dirs, migrate}
 echo "longrun" > /etc/s6-overlay/s6-rc.d/claimer/type
 EOF
 
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/claimer/start.sh
-#!/command/with-contenv sh
-cartesi-rollups-claimer
-EOF
-
 COPY <<EOF /etc/s6-overlay/s6-rc.d/claimer/run
 #!/command/execlineb -P
 with-contenv
 pipeline -w { sed --unbuffered "s/^/claimer: /" }
 fdmove -c 2 1
-/bin/sh /etc/s6-overlay/s6-rc.d/claimer/start.sh
+cartesi-rollups-claimer
 EOF
 
 ################################################################################
@@ -380,9 +365,13 @@ touch /etc/s6-overlay/s6-rc.d/user/contents.d/hlgraphql
 echo "longrun" > /etc/s6-overlay/s6-rc.d/hlgraphql/type
 EOF
 
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
-#!/command/with-contenv sh
-POSTGRES_DB=${GRAPHQL_DB} cartesi-rollups-hl-graphql \
+COPY <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/hlgraphql: /" }
+fdmove -c 2 1
+importas POSTGRES_DB GRAPHQL_DB
+cartesi-rollups-hl-graphql \
     --disable-devnet \
     --disable-advance \
     --disable-inspect \
@@ -392,14 +381,6 @@ POSTGRES_DB=${GRAPHQL_DB} cartesi-rollups-hl-graphql \
     --graphile-disable-sync \
     --db-implementation=postgres \
     --db-raw-url=${CARTESI_POSTGRES_ENDPOINT}
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/run
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/hlgraphql: /" }
-fdmove -c 2 1
-/bin/sh /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
 EOF
 
 # deploy script
