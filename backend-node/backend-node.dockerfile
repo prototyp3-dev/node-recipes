@@ -262,29 +262,35 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/up
 EOF
 
 ################################################################################
-# Configure s6 reader
+# Configure s6 evm-reader
 RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/reader/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/reader/dependencies.d/{prepare-dirs, migrate}
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/reader
-echo "longrun" > /etc/s6-overlay/s6-rc.d/reader/type
+mkdir -p /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/{prepare-dirs, migrate}
+echo "longrun" > /etc/s6-overlay/s6-rc.d/evm-reader/type
 EOF
 
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/reader/start.sh
-#!/command/with-contenv sh
-READER_CMD=cartesi-rollups-evm-reader
-if [ ${MAIN_SEQUENCER} = espresso ]; then
-    READER_CMD=cartesi-rollups-espresso-reader
-fi
-${READER_CMD}
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/reader/run
+COPY <<EOF /etc/s6-overlay/s6-rc.d/evm-reader/run
 #!/command/execlineb -P
 with-contenv
-pipeline -w { sed --unbuffered "s/^/reader: /" }
+pipeline -w { sed --unbuffered "s/^/evm-reader: /" }
 fdmove -c 2 1
-/bin/sh /etc/s6-overlay/s6-rc.d/reader/start.sh
+cartesi-rollups-evm-reader
+EOF
+
+################################################################################
+# Configure s6 espresso-reader
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/{prepare-dirs, migrate}
+echo "longrun" > /etc/s6-overlay/s6-rc.d/espresso-reader/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/espresso-reader/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/espresso-reader: /" }
+fdmove -c 2 1
+cartesi-rollups-espresso-reader
 EOF
 
 ################################################################################
@@ -353,6 +359,13 @@ if [[ ${CARTESI_FEATURE_CLAIMER_ENABLED} = false ]] || \
 else
     echo 'Claimer enabled'
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
+fi
+
+# decide which reader to start
+if [[ ${MAIN_READER} = espresso ]]; then
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-reader
+else
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
 fi
 EOF
 
