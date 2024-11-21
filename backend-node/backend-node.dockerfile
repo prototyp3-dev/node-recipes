@@ -6,7 +6,7 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG NONODO_VERSION=2.14.1-beta
+ARG HLGRAPHQL_VERSION=2.0.0
 ARG TRAEFIK_VERSION=3.2.0
 ARG GO_BUILD_PATH=/build/cartesi/go
 
@@ -69,10 +69,15 @@ ARG TELEGRAF_VERSION
 RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_$(dpkg --print-architecture).tar.gz | \
     tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
 
-# install nonodo
-ARG NONODO_VERSION
-RUN curl -s -L https://github.com/Calindra/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
-    tar xzf - -C /usr/local/bin nonodo
+# install cartesi-rollups-hl-graphql
+ARG HLGRAPHQL_VERSION
+RUN curl -s -L https://github.com/Calindra/cartesi-rollups-hl-graphql/releases/download/v${HLGRAPHQL_VERSION}/cartesi-rollups-hl-graphql-v${HLGRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+    tar xzf - -C /usr/local/bin cartesi-rollups-hl-graphql
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
+chown -R cartesi:cartesi /etc/s6-overlay/s6-rc.d/user/contents.d
+EOF
 
 # configure telegraf
 RUN <<EOF
@@ -89,6 +94,8 @@ echo "
     precision = '1ms'
     omit_hostname = true
 
+[[inputs.processes]]
+
 [[inputs.procstat]]
 
 [[outputs.health]]
@@ -96,11 +103,11 @@ echo "
 
 [[inputs.procstat.filter]]
     name = 'rollups-node'
-    process_names = ['cartesi-rollups-*', 'jsonrpc-remote-cartesi-*', '*cartesi*', 'telegraf', 'nonodo', 'traefik']
+    process_names = ['cartesi-rollups-*', 'jsonrpc-remote-cartesi-*', '*cartesi*', 'telegraf', 'cartesi-rollups-hl-graphql', 'nonodo', 'nginx']
 
 [[outputs.prometheus_client]]
     listen = ':9000'
-    collectors_exclude = ['gocollector', 'process']
+    collectors_exclude = ['process']
 " > /etc/telegraf/telegraf.conf
 EOF
 
@@ -220,10 +227,10 @@ echo "/etc/s6-overlay/s6-rc.d/migrate/run.sh" \
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate
 EOF
 
-# Configure s6 migrate
+# Configure s6 create db
 RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d/migrate
-mkdir -p /etc/s6-overlay/s6-rc.d/createhlgdb
 echo "oneshot" > /etc/s6-overlay/s6-rc.d/createhlgdb/type
 echo "#!/command/with-contenv sh
 PGPASSWORD=\${POSTGRES_PASSWORD} psql -U \${POSTGRES_USER} -h \${POSTGRES_HOST} \
@@ -235,24 +242,100 @@ echo "/etc/s6-overlay/s6-rc.d/createhlgdb/run.sh" \
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/createhlgdb
 EOF
 
-# Configure s6 node
+# Configure s6 reader
 RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/node/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/node/dependencies.d/prepare-dirs \
-    /etc/s6-overlay/s6-rc.d/node/dependencies.d/migrate
-echo "longrun" > /etc/s6-overlay/s6-rc.d/node/type
+mkdir -p /etc/s6-overlay/s6-rc.d/reader/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/reader/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/reader/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/reader/type
 echo "#!/command/with-contenv sh
-cartesi-rollups-node
-" > /etc/s6-overlay/s6-rc.d/node/start.sh
+READER_CMD=cartesi-rollups-evm-reader
+if [ \${MAIN_SEQUENCER} = espresso ]; then
+    READER_CMD=cartesi-rollups-espresso-reader
+fi
+\${READER_CMD}
+" > /etc/s6-overlay/s6-rc.d/reader/start.sh
 echo "#!/command/execlineb -P
 with-contenv
-pipeline -w { sed --unbuffered \"s/^/node: /\" }
+pipeline -w { sed --unbuffered \"s/^/reader: /\" }
 fdmove -c 2 1
-/bin/sh /etc/s6-overlay/s6-rc.d/node/start.sh
-" > /etc/s6-overlay/s6-rc.d/node/run
-mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/node
+/bin/sh /etc/s6-overlay/s6-rc.d/reader/start.sh
+" > /etc/s6-overlay/s6-rc.d/reader/run
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/reader
 EOF
+
+# Configure s6 advancer
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/advancer/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/advancer/type
+echo "#!/command/with-contenv sh
+cartesi-rollups-advancer
+" > /etc/s6-overlay/s6-rc.d/advancer/start.sh
+echo "#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered \"s/^/advancer: /\" }
+fdmove -c 2 1
+/bin/sh /etc/s6-overlay/s6-rc.d/advancer/start.sh
+" > /etc/s6-overlay/s6-rc.d/advancer/run
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/advancer
+EOF
+
+# Configure s6 validator
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/validator/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/validator/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/validator/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/validator/type
+echo "#!/command/with-contenv sh
+cartesi-rollups-validator
+" > /etc/s6-overlay/s6-rc.d/validator/start.sh
+echo "#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered \"s/^/validator: /\" }
+fdmove -c 2 1
+/bin/sh /etc/s6-overlay/s6-rc.d/validator/start.sh
+" > /etc/s6-overlay/s6-rc.d/validator/run
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
+EOF
+
+# Configure s6 claimer
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/claimer/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/claimer/type
+echo "#!/command/with-contenv sh
+cartesi-rollups-claimer
+" > /etc/s6-overlay/s6-rc.d/claimer/start.sh
+echo "#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered \"s/^/claimer: /\" }
+fdmove -c 2 1
+/bin/sh /etc/s6-overlay/s6-rc.d/claimer/start.sh
+" > /etc/s6-overlay/s6-rc.d/claimer/run
+EOF
+
+# Configure s6 stage 2 hook
+RUN <<EOF
+mkdir -p /etc/s6-overlay/scripts
+echo "#!/command/with-contenv bash
+if [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = false ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = f ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = no ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = n ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = 0 ]]; then
+    echo 'Claimer disabled'
+else
+    echo 'Claimer enabled'
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
+fi
+" > /etc/s6-overlay/scripts/stage2-hook.sh
+chmod +x /etc/s6-overlay/scripts/stage2-hook.sh
+EOF
+
+ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 
 # Configure s6 hlgraphql
 RUN <<EOF
@@ -260,7 +343,7 @@ mkdir -p /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/createhlgdb
 echo "longrun" > /etc/s6-overlay/s6-rc.d/hlgraphql/type
 echo "#!/command/with-contenv sh
-POSTGRES_DB=\${GRAPHQL_DB} nonodo \
+POSTGRES_DB=\${GRAPHQL_DB} cartesi-rollups-hl-graphql \
     --disable-devnet \
     --disable-advance \
     --disable-inspect \
@@ -277,7 +360,6 @@ pipeline -w { sed --unbuffered \"s/^/hlgraphql: /\" }
 fdmove -c 2 1
 /bin/sh /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
 " > /etc/s6-overlay/s6-rc.d/hlgraphql/run
-mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/hlgraphql
 EOF
 
