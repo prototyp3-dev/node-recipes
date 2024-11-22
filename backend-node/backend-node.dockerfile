@@ -153,10 +153,10 @@ http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
 
-    log_format  main  '$remote_addr - $upstream_cache_status rt=$request_time [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for" '
-                      'uct="$upstream_connect_time" uht="$upstream_header_time" urt="$upstream_response_time"';
+    log_format  main  '\$remote_addr - \$upstream_cache_status rt=\$request_time [\$time_local] "\$request" '
+                      '\$status \$body_bytes_sent "\$http_referer" '
+                      '"\$http_user_agent" "\$http_x_forwarded_for" '
+                      'uct="\$upstream_connect_time" uht="\$upstream_header_time" urt="\$upstream_response_time"';
 
     access_log  /var/log/nginx/access.log  main;
 
@@ -167,7 +167,7 @@ http {
 
     #gzip  on;
 
-    map $request_method $purge_method {
+    map \$request_method \$purge_method {
         PURGE 1;
         default 0;
     }
@@ -235,7 +235,7 @@ EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/migrate/run.sh
 #!/command/with-contenv sh
-cartesi-rollups-cli db upgrade -p ${CARTESI_POSTGRES_ENDPOINT}
+cartesi-rollups-cli db upgrade -p \${CARTESI_POSTGRES_ENDPOINT}
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/migrate/up
@@ -248,13 +248,12 @@ RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d/migrate
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/createhlgdb
-echo "oneshot"/etc/s6-overlay/s6-rc.d/createhlgdb/type
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/createhlgdb/type
 EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
-#!/command/with-contenv sh
-PGPASSWORD=${POSTGRES_PASSWORD} psql -U ${POSTGRES_USER} -h ${POSTGRES_HOST} \
-    -c "create database ${GRAPHQL_DB};" || echo "HLGraphql database alredy created"
+#!/command/with-contenv bash
+PGPASSWORD=\${POSTGRES_PASSWORD} psql -U \${POSTGRES_USER} -h \${POSTGRES_HOST} -c "create database \${GRAPHQL_DB};" || echo "HLGraphql database alredy created"
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/up
@@ -265,7 +264,8 @@ EOF
 # Configure s6 evm-reader
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/{prepare-dirs, migrate}
+touch /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/migrate
 echo "longrun" > /etc/s6-overlay/s6-rc.d/evm-reader/type
 EOF
 
@@ -281,7 +281,8 @@ EOF
 # Configure s6 espresso-reader
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/{prepare-dirs, migrate}
+touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/migrate
 echo "longrun" > /etc/s6-overlay/s6-rc.d/espresso-reader/type
 EOF
 
@@ -297,7 +298,8 @@ EOF
 # Configure s6 advancer
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/advancer/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/{prepare-dirs, migrate}
+touch /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/migrate
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/advancer
 echo "longrun" > /etc/s6-overlay/s6-rc.d/advancer/type
 EOF
@@ -314,7 +316,8 @@ EOF
 # Configure s6 validator
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/validator/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/validator/dependencies.d/{prepare-dirs, migrate}
+touch /etc/s6-overlay/s6-rc.d/validator/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/validator/dependencies.d/migrate
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
 echo "longrun" > /etc/s6-overlay/s6-rc.d/validator/type
 EOF
@@ -331,7 +334,8 @@ EOF
 # Configure s6 claimer
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/claimer/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/{prepare-dirs, migrate}
+touch /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/migrate
 echo "longrun" > /etc/s6-overlay/s6-rc.d/claimer/type
 EOF
 
@@ -350,11 +354,11 @@ RUN mkdir -p /etc/s6-overlay/scripts
 ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
-if [[ ${CARTESI_FEATURE_CLAIMER_ENABLED} = false ]] || \
-        [[ ${CARTESI_FEATURE_CLAIMER_ENABLED} = f ]] || \
-        [[ ${CARTESI_FEATURE_CLAIMER_ENABLED} = no ]] || \
-        [[ ${CARTESI_FEATURE_CLAIMER_ENABLED} = n ]] || \
-        [[ ${CARTESI_FEATURE_CLAIMER_ENABLED} = 0 ]]; then
+if [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = false ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = f ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = no ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = n ]] || \
+        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = 0 ]]; then
     echo 'Claimer disabled'
 else
     echo 'Claimer enabled'
@@ -362,7 +366,7 @@ else
 fi
 
 # decide which reader to start
-if [[ ${MAIN_READER} = espresso ]]; then
+if [[ \${MAIN_READER} = espresso ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-reader
 else
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
@@ -380,20 +384,14 @@ EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/run
 #!/command/execlineb -P
-with-contenv
 pipeline -w { sed --unbuffered "s/^/hlgraphql: /" }
 fdmove -c 2 1
-importas POSTGRES_DB GRAPHQL_DB
-cartesi-rollups-hl-graphql \
-    --disable-devnet \
-    --disable-advance \
-    --disable-inspect \
-    --http-port=${GRAPHQL_PORT} \
-    --raw-enabled \
-    --high-level-graphql \
-    --graphile-disable-sync \
-    --db-implementation=postgres \
-    --db-raw-url=${CARTESI_POSTGRES_ENDPOINT}
+/etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
+#!/command/with-contenv bash
+POSTGRES_DB=\${GRAPHQL_DB} cartesi-rollups-hl-graphql     --disable-devnet     --disable-advance     --disable-inspect     --http-port=\${GRAPHQL_PORT}     --raw-enabled     --high-level-graphql     --graphile-disable-sync     --db-implementation=postgres     --db-raw-url=\${CARTESI_POSTGRES_ENDPOINT}
 EOF
 
 # deploy script
@@ -404,28 +402,28 @@ EOF
 
 COPY --chmod=755 <<EOF /deploy.sh
 #!/bin/bash
-if [ ! -z ${OWNER} ]; then
-    owner_args="-o ${OWNER} -O ${OWNER}"
+if [ ! -z \${OWNER} ]; then
+    owner_args="-o \${OWNER} -O \${OWNER}"
 fi
-if [ ! -z ${AUTHORITY_ADDRESS} ]; then
-    authority_arg="-i ${AUTHORITY_ADDRESS}"
+if [ ! -z \${AUTHORITY_ADDRESS} ]; then
+    authority_arg="-i \${AUTHORITY_ADDRESS}"
 fi
-if [ ! -z ${EPOCH_LENGTH} ]; then
-    epoch_arg="-e ${EPOCH_LENGTH}"
+if [ ! -z \${EPOCH_LENGTH} ]; then
+    epoch_arg="-e \${EPOCH_LENGTH}"
 fi
-if [ ! -z ${SALT} ]; then
-    salt_arg="--salt ${SALT}"
+if [ ! -z \${SALT} ]; then
+    salt_arg="--salt \${SALT}"
 fi
 cartesi-rollups-cli app deploy \
-    -t $1 \
-    --private-key ${CARTESI_AUTH_PRIVATE_KEY} \
-    --rpc-url ${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \
-    -p ${CARTESI_POSTGRES_ENDPOINT} \
-    ${owner_args} \
-    ${authority_arg} \
-    ${epoch_arg} \
-    ${salt_arg} \
-    ${EXTRA_ARGS} \
+    -t \$1 \
+    --private-key \${CARTESI_AUTH_PRIVATE_KEY} \
+    --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \
+    -p \${CARTESI_POSTGRES_ENDPOINT} \
+    \${owner_args} \
+    \${authority_arg} \
+    \${epoch_arg} \
+    \${salt_arg} \
+    \${EXTRA_ARGS} \
     || echo 'Not deployed'
 EOF
 
@@ -433,11 +431,11 @@ EOF
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
 cartesi-rollups-cli app register \
-    -t $1 \
-    -p ${CARTESI_POSTGRES_ENDPOINT} \
-    -a ${APPLICATION_ADDRESS} \
-    -i ${AUTHORITY_ADDRESS} \
-    ${EXTRA_ARGS} \
+    -t \$1 \
+    -p \${CARTESI_POSTGRES_ENDPOINT} \
+    -a \${APPLICATION_ADDRESS} \
+    -i \${AUTHORITY_ADDRESS} \
+    \${EXTRA_ARGS} \
     || echo 'Not deployed'
 EOF
 
@@ -459,19 +457,19 @@ server {
     proxy_cache mycache;
 
     location /graphql {
-        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
+        proxy_pass   http://localhost:\${GRAPHQL_PORT}/graphql;
     }
 
     location /nonce {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
+        proxy_pass   http://localhost:\${ESPRESSO_SERVICE_PORT}/nonce;
     }
 
     location /submit {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
+        proxy_pass   http://localhost:\${ESPRESSO_SERVICE_PORT}/submit;
     }
 
     location /inspect {
-        proxy_pass   http://localhost:${CARTESI_HTTP_PORT}/inspect;
+        proxy_pass   http://localhost:\${CARTESI_HTTP_PORT}/inspect;
         proxy_cache_valid 200 5s;
         proxy_cache_background_update on;
         proxy_cache_use_stale error timeout updating http_500 http_502
