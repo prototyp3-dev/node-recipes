@@ -6,7 +6,7 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG HLGRAPHQL_VERSION=2.0.0
+ARG HLGRAPHQL_VERSION=2.1.0
 ARG TRAEFIK_VERSION=3.2.0
 ARG GO_BUILD_PATH=/build/cartesi/go
 
@@ -205,6 +205,9 @@ ARG GRAPHQL_PORT=10004
 ENV GRAPHQL_PORT=${GRAPHQL_PORT}
 ENV CARTESI_SNAPSHOT_DIR=${NODE_PATH}/snapshots
 
+ENV NODE_DB=rollupsdb
+ENV GRAPHQL_DB=hlgraphql
+
 ################################################################################
 # Configure s6 create dir
 RUN <<EOF
@@ -253,7 +256,7 @@ EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
 #!/command/with-contenv bash
-PGPASSWORD=\${POSTGRES_PASSWORD} psql -U \${POSTGRES_USER} -h \${POSTGRES_HOST} -c "create database \${GRAPHQL_DB};" || echo "HLGraphql database alredy created"
+psql \${CARTESI_POSTGRES_ENDPOINT} -c "create database \${GRAPHQL_DB};" || echo "HLGraphql database alredy created"
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/up
@@ -366,7 +369,7 @@ else
 fi
 
 # decide which reader to start
-if [[ \${MAIN_READER} = espresso ]]; then
+if [[ \${MAIN_SEQUENCER} = espresso ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-reader
 else
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
@@ -375,23 +378,53 @@ EOF
 
 ################################################################################
 # Configure s6 hlgraphql
+ENV HLGRAPHQL_ENVFILE=${NODE_PATH}/hlgraphql-envs
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/define-envs
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-envs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-envs/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-envs/run.sh
+#!/command/with-contenv sh
+echo "POSTGRES_GRAPHQL_DB_URL=\${CARTESI_POSTGRES_ENDPOINT}" > \${HLGRAPHQL_ENVFILE}
+sed -i -e "s/\${NODE_DB}/\${GRAPHQL_DB}/" \${HLGRAPHQL_ENVFILE}
+if [[ \${CARTESI_LOG_LEVEL} = debug ]]; then
+    echo "EXTRA_FLAGS=' -d'" >> \${HLGRAPHQL_ENVFILE}
+else
+echo "EXTRA_FLAGS=" >> \${HLGRAPHQL_ENVFILE}
+fi
+
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/define-envs/up
+/etc/s6-overlay/s6-rc.d/define-envs/run.sh
+EOF
+
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/createhlgdb
+touch /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/createhlgdb \
+    /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/define-envs
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/hlgraphql
 echo "longrun" > /etc/s6-overlay/s6-rc.d/hlgraphql/type
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/run
 #!/command/execlineb -P
+with-contenv
 pipeline -w { sed --unbuffered "s/^/hlgraphql: /" }
 fdmove -c 2 1
-/etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/hlgraphql/start.sh
-#!/command/with-contenv bash
-POSTGRES_DB=\${GRAPHQL_DB} cartesi-rollups-hl-graphql     --disable-devnet     --disable-advance     --disable-inspect     --http-port=\${GRAPHQL_PORT}     --raw-enabled     --high-level-graphql     --graphile-disable-sync     --db-implementation=postgres     --db-raw-url=\${CARTESI_POSTGRES_ENDPOINT}
+importas -S HLGRAPHQL_ENVFILE
+envfile \${HLGRAPHQL_ENVFILE}
+multisubstitute {
+    importas -S POSTGRES_GRAPHQL_DB_URL
+    importas -S EXTRA_FLAGS
+    importas POSTGRES_NODE_DB_URL CARTESI_POSTGRES_ENDPOINT
+}
+export POSTGRES_GRAPHQL_DB_URL \${POSTGRES_GRAPHQL_DB_URL}
+export POSTGRES_NODE_DB_URL \${POSTGRES_NODE_DB_URL}
+cartesi-rollups-hl-graphql \${EXTRA_FLAGS}
 EOF
 
 # deploy script
@@ -414,29 +447,13 @@ fi
 if [ ! -z \${SALT} ]; then
     salt_arg="--salt \${SALT}"
 fi
-cartesi-rollups-cli app deploy \
-    -t \$1 \
-    --private-key \${CARTESI_AUTH_PRIVATE_KEY} \
-    --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \
-    -p \${CARTESI_POSTGRES_ENDPOINT} \
-    \${owner_args} \
-    \${authority_arg} \
-    \${epoch_arg} \
-    \${salt_arg} \
-    \${EXTRA_ARGS} \
-    || echo 'Not deployed'
+cartesi-rollups-cli app deploy -t \$1 --private-key \${CARTESI_AUTH_PRIVATE_KEY} --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -p \${CARTESI_POSTGRES_ENDPOINT} \${owner_args} \${authority_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} || echo 'Not deployed'
 EOF
 
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
-cartesi-rollups-cli app register \
-    -t \$1 \
-    -p \${CARTESI_POSTGRES_ENDPOINT} \
-    -a \${APPLICATION_ADDRESS} \
-    -i \${AUTHORITY_ADDRESS} \
-    \${EXTRA_ARGS} \
-    || echo 'Not deployed'
+cartesi-rollups-cli app register -t \$1 -p \${CARTESI_POSTGRES_ENDPOINT} -a \${APPLICATION_ADDRESS} -i \${AUTHORITY_ADDRESS} \${EXTRA_ARGS} || echo 'Not registered'
 EOF
 
 # =============================================================================

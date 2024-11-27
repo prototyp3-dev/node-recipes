@@ -107,20 +107,15 @@ CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
 MAIN_SEQUENCER=espresso
 ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
 ESPRESSO_NAMESPACE=51025
-GRAPHQL_DB=hlgraphql
 ESPRESSO_STARTING_BLOCK=
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
 CARTESI_BLOCKCHAIN_WS_ENDPOINT=
 CARTESI_BLOCKCHAIN_ID=
 CARTESI_AUTH_PRIVATE_KEY=
 CARTESI_POSTGRES_ENDPOINT=
-POSTGRES_HOST=
-POSTGRES_PASSWORD=
-POSTGRES_USER=
-POSTGRES_PORT=
 ```
 
-Note that the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` will be provided on the Step 3.
+Note that the value of `CARTESI_POSTGRES_ENDPOINT` will be provided on the Step 3.
 
 Then follow these steps to deploy on fly
 
@@ -170,7 +165,7 @@ We suggest creating a persistent volume to store the snapshots, so you wouldn't 
 flyctl ext supabase create
 ```
 
-Make sure to add the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables to your environment file.
+Make sure to add the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file.
 
 You can also use the `fly postgres` to create the database:
 
@@ -178,10 +173,10 @@ You can also use the `fly postgres` to create the database:
 flyctl database create
 ```
 
-Similarly, make sure to set the values of `CARTESI_POSTGRES_ENDPOINT`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
+Similarly, make sure to set the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `rollupsdb` and option `sslmode=disable` to the string (**`rollupsdb?sslmode=disable`**):
 
 ```shell
-postgres://{username}:{password}@{hostname}:{port}/postgres?sslmode=disable
+postgres://{username}:{password}@{hostname}:{port}/rollupsdb?sslmode=disable
 ```
 
 **Step 4**: Create the Fly app without deploying yet
