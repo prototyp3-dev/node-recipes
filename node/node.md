@@ -2,7 +2,7 @@
 
 Instructions to run a cartesi rollups node
 
-Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to start a local node with a devnet, [Testnet](#testnet) to start local node using a testnet, [Fly](#fly) for instructions to deploy a node on [Fly](https://fly.io/docs), and [Prepare the Snapshot](#prepare-the-snapshot) for instructions to build the app snapshot.
+Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to start a local node with a devnet, [Testnet](#testnet) to start local node using a testnet, [Fly](#deploy-backend-to-flyio) for instructions to deploy a node on [Fly](https://fly.io/docs), and [Prepare the Snapshot](#prepare-the-snapshot) for instructions to build the app snapshot.
 
 ## Setup
 
