@@ -145,10 +145,10 @@ mkdir -p .fly/node
   path = "/metrics"
 
 [[vm]]
-  size = 'shared-cpu-2x'
-  memory = '4gb'
+  size = 'shared-cpu-1x'
+  memory = '1gb'
   cpu_kind = 'shared'
-  cpus = 2
+  cpus = 1
 ```
 
 We suggest creating a persistent volume to store the snapshots, so you wouldn't need to transfer the snapshots when restarting the virtual machine. Create the `<node-volume>` volume and add this section to the `.fly/node/fly.toml` file:
@@ -163,7 +163,7 @@ We suggest creating a persistent volume to store the snapshots, so you wouldn't 
 **Step 3**: Create the Postgres database
 
 ```shell
-flyctl ext supabase create
+fly ext supabase create
 ```
 
 Make sure to add the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file.
@@ -171,13 +171,13 @@ Make sure to add the value of `CARTESI_POSTGRES_ENDPOINT` variable to your envir
 You can also use the `fly postgres` to create the database:
 
 ```shell
-flyctl database create
+fly postgres create
 ```
 
-Similarly, make sure to set the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `rollupsdb` and option `sslmode=disable` to the string (**`rollupsdb?sslmode=disable`**):
+Similarly, make sure to set the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
 
 ```shell
-postgres://{username}:{password}@{hostname}:{port}/rollupsdb?sslmode=disable
+postgres://{username}:{password}@{hostname}:{port}/postgres?sslmode=disable
 ```
 
 **Step 4**: Create the Fly app without deploying yet

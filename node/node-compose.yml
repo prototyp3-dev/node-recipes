@@ -3,6 +3,7 @@ x-env: &env
   CARTESI_POSTGRES_ENDPOINT: postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
   CARTESI_HTTP_ADDRESS: 0.0.0.0
   CARTESI_HTTP_PORT: 10000
+  POSTGRES_PASSWORD: "password"
 
 services:
   devnet:

@@ -357,11 +357,11 @@ RUN mkdir -p /etc/s6-overlay/scripts
 ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
-if [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = false ]] || \
-        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = f ]] || \
-        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = no ]] || \
-        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = n ]] || \
-        [[ \${CARTESI_FEATURE_CLAIMER_ENABLED} = 0 ]]; then
+if [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = false ]] || \
+        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = f ]] || \
+        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = no ]] || \
+        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = n ]] || \
+        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = 0 ]]; then
     echo 'Claimer disabled'
 else
     echo 'Claimer enabled'
@@ -381,31 +381,31 @@ EOF
 ENV HLGRAPHQL_ENVFILE=${NODE_PATH}/hlgraphql-envs
 
 RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/define-envs
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-envs
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-envs/type
+mkdir -p /etc/s6-overlay/s6-rc.d/define-hlg-envs/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/define-hlg-envs/dependencies.d/prepare-dirs
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-hlg-envs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-hlg-envs/type
 EOF
 
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-envs/run.sh
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-hlg-envs/run.sh
 #!/command/with-contenv sh
 echo "POSTGRES_GRAPHQL_DB_URL=\${CARTESI_POSTGRES_ENDPOINT}" > \${HLGRAPHQL_ENVFILE}
 sed -i -e "s/\${NODE_DB}/\${GRAPHQL_DB}/" \${HLGRAPHQL_ENVFILE}
-if [[ \${CARTESI_LOG_LEVEL} = debug ]]; then
-    echo "EXTRA_FLAGS=' -d'" >> \${HLGRAPHQL_ENVFILE}
+if [ \${CARTESI_LOG_LEVEL} = debug ]; then
+    echo "EXTRA_FLAGS=\" -d\"" >> \${HLGRAPHQL_ENVFILE}
 else
 echo "EXTRA_FLAGS=" >> \${HLGRAPHQL_ENVFILE}
 fi
-
 EOF
 
-COPY <<EOF /etc/s6-overlay/s6-rc.d/define-envs/up
-/etc/s6-overlay/s6-rc.d/define-envs/run.sh
+COPY <<EOF /etc/s6-overlay/s6-rc.d/define-hlg-envs/up
+/etc/s6-overlay/s6-rc.d/define-hlg-envs/run.sh
 EOF
 
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/createhlgdb \
-    /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/define-envs
+    /etc/s6-overlay/s6-rc.d/hlgraphql/dependencies.d/define-hlg-envs
 touch /etc/s6-overlay/s6-rc.d/user/contents.d/hlgraphql
 echo "longrun" > /etc/s6-overlay/s6-rc.d/hlgraphql/type
 EOF
@@ -429,7 +429,6 @@ EOF
 
 # deploy script
 RUN <<EOF
-mkdir -p /mnt/snapshots
 chown -R cartesi:cartesi /mnt
 EOF
 
@@ -474,19 +473,19 @@ server {
     proxy_cache mycache;
 
     location /graphql {
-        proxy_pass   http://localhost:\${GRAPHQL_PORT}/graphql;
+        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
     }
 
     location /nonce {
-        proxy_pass   http://localhost:\${ESPRESSO_SERVICE_PORT}/nonce;
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
     }
 
     location /submit {
-        proxy_pass   http://localhost:\${ESPRESSO_SERVICE_PORT}/submit;
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
     }
 
     location /inspect {
-        proxy_pass   http://localhost:\${CARTESI_HTTP_PORT}/inspect;
+        proxy_pass   http://localhost:${CARTESI_HTTP_PORT}/inspect;
         proxy_cache_valid 200 5s;
         proxy_cache_background_update on;
         proxy_cache_use_stale error timeout updating http_500 http_502
@@ -511,22 +510,22 @@ RUN ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.
 COPY --chmod=755 <<EOF /init-wrapper
 #!/bin/sh
 # run /init with PID 1, creating a new PID namespace if necessary
-if [ "$$" -eq 1 ]; then
+if [ "\$$" -eq 1 ]; then
     # we already have PID 1
-    exec /init "$@"
+    exec /init "\$@"
 else
     # create a new PID namespace
     exec unshare --pid sh -c '
         # set up /proc and start the real init in the background
-        unshare --mount-proc /init "$@" &
-        child="$!"
+        unshare --mount-proc /init "\$@" &
+        child="\$!"
         # forward signals to the real init
         trap "kill -INT \$child" INT
         trap "kill -TERM \$child" TERM
         # wait until the real init exits
         # ("wait" returns early on signals; "kill -0" checks if the process exists)
-        until wait "$child" || ! kill -0 "$child" 2>/dev/null; do :; done
-    ' sh "$@"
+        until wait "\$child" || ! kill -0 "\$child" 2>/dev/null; do :; done
+    ' sh "\$@"
 fi
 EOF
 
