@@ -6,7 +6,7 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG HLGRAPHQL_VERSION=2.1.0
+ARG HLGRAPHQL_VERSION=2.1.2
 ARG TRAEFIK_VERSION=3.2.0
 ARG GO_BUILD_PATH=/build/cartesi/go
 
@@ -339,6 +339,7 @@ RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/claimer/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/prepare-dirs \
     /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/migrate
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
 echo "longrun" > /etc/s6-overlay/s6-rc.d/claimer/type
 EOF
 
@@ -357,16 +358,6 @@ RUN mkdir -p /etc/s6-overlay/scripts
 ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
-if [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = false ]] || \
-        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = f ]] || \
-        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = no ]] || \
-        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = n ]] || \
-        [[ \${CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED} = 0 ]]; then
-    echo 'Claimer disabled'
-else
-    echo 'Claimer enabled'
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
-fi
 
 # decide which reader to start
 if [[ \${MAIN_SEQUENCER} = espresso ]]; then
@@ -421,10 +412,17 @@ multisubstitute {
     importas -S POSTGRES_GRAPHQL_DB_URL
     importas -S EXTRA_FLAGS
     importas POSTGRES_NODE_DB_URL CARTESI_POSTGRES_ENDPOINT
+    importas -S GRAPHQL_PORT
+    importas -S CARTESI_BLOCKCHAIN_WS_ENDPOINT
+    importas -S CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER
 }
 export POSTGRES_GRAPHQL_DB_URL \${POSTGRES_GRAPHQL_DB_URL}
 export POSTGRES_NODE_DB_URL \${POSTGRES_NODE_DB_URL}
-cartesi-rollups-hl-graphql \${EXTRA_FLAGS}
+cartesi-rollups-hl-graphql \
+    --http-port \${GRAPHQL_PORT} \
+    --rpc-url \${CARTESI_BLOCKCHAIN_WS_ENDPOINT} \
+    --contracts-input-box-block \${CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER} \
+    \${EXTRA_FLAGS}
 EOF
 
 # deploy script
