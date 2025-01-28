@@ -6,29 +6,108 @@
 ARG EMULATOR_VERSION=0.18.1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG HLGRAPHQL_VERSION=2.1.2
+ARG HLGRAPHQL_VERSION=2.3.4
 ARG TRAEFIK_VERSION=3.2.0
+ARG GOVERSION=1.23.5
 ARG GO_BUILD_PATH=/build/cartesi/go
+ARG ROLLUPSNODE_BRANCH=feature/new-build-20250124 
+ARG ROLLUPSNODE_DIR=rollups-node
+ARG ESPRESSOREADER_VERSION=2.0.1-beta
+ARG ESPRESSOREADER_BRANCH=main
+ARG ESPRESSOREADER_DIR=rollups-espresso-reader
+ARG ESPRESSO_DEV_NODE_TAG=20241120-patch3
+
+ARG GRAPHQL_BRANCH=feature/migration-db-v2-beta
+ARG GRAPHQL_DIR=rollups-graphql
 
 # =============================================================================
 # STAGE: node builder
 #
 # =============================================================================
 
-FROM recipe-stage/builder AS go-builder
+FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS common-env
+
+USER root
+
+RUN <<EOF
+apt update
+apt install -y --no-install-recommends \
+    build-essential \
+    wget ca-certificates \
+    git
+EOF
+
+USER cartesi
+
+FROM common-env AS go-installer
+
+USER root
+
+ARG GOVERSION
+
+RUN wget https://go.dev/dl/go${GOVERSION}.linux-$(dpkg --print-architecture).tar.gz && \
+    tar -C /usr/local -xzf go${GOVERSION}.linux-$(dpkg --print-architecture).tar.gz
+
+ENV PATH=/usr/local/go/bin:${PATH}
+
+ARG GO_BUILD_PATH
+RUN mkdir -p ${GO_BUILD_PATH} && chown -R cartesi:cartesi ${GO_BUILD_PATH}
+
+USER cartesi
+
+FROM go-installer AS go-builder
 
 ARG GO_BUILD_PATH
 
-# Remove postgraphile migration
-RUN rm ${GO_BUILD_PATH}/rollups-node/internal/repository/schema/migrations/000002_create_postgraphile_view*
-RUN sed -i -e 's/const ExpectedVersion uint = 2/const ExpectedVersion uint = 1/' ${GO_BUILD_PATH}/rollups-node/internal/repository/schema/schema.go
+ENV GOCACHE=${GO_BUILD_PATH}/.cache
+ENV GOENV=${GO_BUILD_PATH}/.config/go/env
+ENV GOPATH=${GO_BUILD_PATH}/.go
 
-RUN cd ${GO_BUILD_PATH}/rollups-node && make build-go
+ARG ROLLUPSNODE_BRANCH
+ARG ROLLUPSNODE_DIR
+
+RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
+    https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
+
+RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && go mod download
+RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && make build-go
+
+ARG ESPRESSOREADER_VERSION
+ARG ESPRESSOREADER_DIR
+ARG ESPRESSOREADER_BRANCH
+
+RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
+    https://github.com/Calindra/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+# RUN mkdir -p ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+# RUN wget -qO- https://github.com/Calindra/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
+#     tar xzf - --strip-components 1 -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+RUN wget -qO- https://github.com/Calindra/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/rollupsdb-postgres-bindings.tar.gz | \
+    tar xzf - -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+
+RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
+RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
+    go build -o cartesi-rollups-espresso-reader && \
+    go build -o cartesi-rollups-espresso-reader-db-migration dev/migrate/main.go
+
+
+ARG GRAPHQL_BRANCH
+ARG GRAPHQL_DIR
+
+RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
+    https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+
+RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
+RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
+    go build -o cartesi-rollups-graphql
+
 
 # =============================================================================
 # STAGE: base-rollups-node-we
 #
 # =============================================================================
+
+# https://github.com/EspressoSystems/espresso-sequencer/pkgs/container/espresso-sequencer%2Fespresso-dev-node
+FROM ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:${ESPRESSO_DEV_NODE_TAG} AS espresso-dev-node
 
 FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS base-rollups-node-we
 
@@ -55,7 +134,12 @@ EOF
 
 # Copy Go binary.
 ARG GO_BUILD_PATH
-COPY --from=go-builder ${GO_BUILD_PATH}/rollups-node/cartesi-rollups-* /usr/bin
+ARG ROLLUPSNODE_DIR
+ARG ESPRESSOREADER_DIR
+ARG GRAPHQL_DIR
+COPY --from=go-builder ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}/cartesi-rollups-* /usr/bin
+COPY --from=go-builder ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-* /usr/bin
+COPY --from=go-builder ${GO_BUILD_PATH}/${cartesi-rollups-graphql}/cartesi-rollups-* /usr/bin
 
 # install s6 overlay
 ARG S6_OVERLAY_VERSION
@@ -69,15 +153,15 @@ ARG TELEGRAF_VERSION
 RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_$(dpkg --print-architecture).tar.gz | \
     tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
 
-# install cartesi-rollups-hl-graphql
-ARG HLGRAPHQL_VERSION
-RUN curl -s -L https://github.com/Calindra/cartesi-rollups-hl-graphql/releases/download/v${HLGRAPHQL_VERSION}/cartesi-rollups-hl-graphql-v${HLGRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
-    tar xzf - -C /usr/local/bin cartesi-rollups-hl-graphql
+# # install cartesi-rollups-graphql
+# ARG HLGRAPHQL_VERSION
+# RUN curl -s -L https://github.com/cartesi/rollups-graphql/releases/download/v${HLGRAPHQL_VERSION}/cartesi-rollups-graphql-v${HLGRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+#     tar xzf - -C /usr/local/bin cartesi-rollups-graphql
 
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
-chown -R cartesi:cartesi /etc/s6-overlay/s6-rc.d/user/contents.d
-EOF
+# Install espresso
+COPY --from=espresso-dev-node /usr/bin/espresso-dev-node /usr/local/bin/
+
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
 
 ################################################################################
 # configure telegraf
@@ -103,7 +187,10 @@ COPY <<EOF /etc/telegraf/telegraf.conf
 
 [[inputs.procstat.filter]]
     name = 'rollups-node'
-    process_names = ['cartesi-rollups-*', 'jsonrpc-remote-cartesi-*', '*cartesi*', 'telegraf', 'cartesi-rollups-hl-graphql', 'nonodo', 'nginx']
+    process_names = ['cartesi-rollups-*', 'jsonrpc-remote-cartesi-*', '*cartesi*', 'telegraf', 'cartesi-rollups-graphql', 'nginx']
+
+[[inputs.prometheus]]
+    urls = ["http://localhost:10001","http://localhost:10002","http://localhost:10003","http://localhost:10004"]
 
 [[outputs.prometheus_client]]
     listen = ':9000'
@@ -195,18 +282,20 @@ fdmove -c 2 1
 EOF
 
 # Env variables
-ARG CARTESI_HTTP_PORT=10000
+ARG CARTESI_HTTP_PORT=10012
 ENV CARTESI_HTTP_PORT=${CARTESI_HTTP_PORT}
+ENV CARTESI_INSPECT_ADDRESS=localhost:${CARTESI_HTTP_PORT}
 ARG ESPRESSO_SERVICE_PORT=10030
 ENV ESPRESSO_SERVICE_PORT=${ESPRESSO_SERVICE_PORT}
 ARG ESPRESSO_SERVICE_ENDPOINT=localhost:${ESPRESSO_SERVICE_PORT}
 ENV ESPRESSO_SERVICE_ENDPOINT=${ESPRESSO_SERVICE_ENDPOINT}
-ARG GRAPHQL_PORT=10004
+ARG GRAPHQL_PORT=10020
 ENV GRAPHQL_PORT=${GRAPHQL_PORT}
 ENV CARTESI_SNAPSHOT_DIR=${NODE_PATH}/snapshots
 
 ENV NODE_DB=rollupsdb
 ENV GRAPHQL_DB=hlgraphql
+ENV ESPRESSONODE_DB=sequencer
 
 ################################################################################
 # Configure s6 create dir
@@ -246,7 +335,7 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/migrate/up
 EOF
 
 ################################################################################
-# Configure s6 create db
+# Configure s6 create hl db
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/createhlgdb/dependencies.d/migrate
@@ -256,7 +345,7 @@ EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/run.sh
 #!/command/with-contenv bash
-psql \${CARTESI_POSTGRES_ENDPOINT} -c "create database \${GRAPHQL_DB};" || echo "HLGraphql database alredy created"
+psql \${CARTESI_POSTGRES_ENDPOINT} -c "create database \${GRAPHQL_DB};" && echo "HLGraphql database created!" || echo "HLGraphql database alredy created"
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/createhlgdb/up
@@ -265,10 +354,35 @@ EOF
 
 ################################################################################
 # Configure s6 evm-reader
+ENV EVMREADER_ENVFILE=${NODE_PATH}/evmreader-envs
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/define-evmreader-envs/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/define-evmreader-envs/dependencies.d/prepare-dirs
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-evmreader-envs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-evmreader-envs/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-evmreader-envs/run.sh
+#!/command/with-contenv sh
+if [ \${MAIN_SEQUENCER} = espresso ]; then
+    echo "CARTESI_FEATURE_INPUT_READER_ENABLED=false" > \${EVMREADER_ENVFILE}
+else
+    echo "CARTESI_FEATURE_INPUT_READER_ENABLED=true" > \${EVMREADER_ENVFILE}
+fi
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/define-evmreader-envs/up
+/etc/s6-overlay/s6-rc.d/define-evmreader-envs/run.sh
+EOF
+
+
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/prepare-dirs \
-    /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/migrate
+    /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/migrate \
+    /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/define-evmreader-envs
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
 echo "longrun" > /etc/s6-overlay/s6-rc.d/evm-reader/type
 EOF
 
@@ -277,15 +391,151 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/evm-reader/run
 with-contenv
 pipeline -w { sed --unbuffered "s/^/evm-reader: /" }
 fdmove -c 2 1
+importas -S EVMREADER_ENVFILE
+envfile \${EVMREADER_ENVFILE}
 cartesi-rollups-evm-reader
 EOF
 
 ################################################################################
+# Configure s6 create espresso db
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/createespressonodedb
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/createespressonodedb/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/createespressonodedb/run.sh
+#!/command/with-contenv bash
+psql \${CARTESI_POSTGRES_ENDPOINT} -c "create database \${ESPRESSONODE_DB};" && echo "Espresso node database created!" || echo "Espresso node database alredy created"
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/createespressonodedb/up
+/etc/s6-overlay/s6-rc.d/createespressonodedb/run.sh
+EOF
+
+################################################################################
+# Configure s6 espresso dev node
+
+ENV ESPRESSO_ENVFILE=${NODE_PATH}/espresso-envs
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/define-espresso-envs/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/define-espresso-envs/dependencies.d/prepare-dirs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-espresso-envs/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-espresso-envs/run.sh
+#!/command/with-contenv sh
+echo "POSTGRES_ESPRESSO_DB_URL=\${CARTESI_POSTGRES_ENDPOINT}" > \${ESPRESSO_ENVFILE}
+sed -i -e "s/\${NODE_DB}/\${ESPRESSONODE_DB}/" \${ESPRESSO_ENVFILE}
+if [ \${CARTESI_LOG_LEVEL} = debug ]; then
+    echo "ESPRESSONODE_RUST_LOG=\${CARTESI_LOG_LEVEL}" >> \${ESPRESSO_ENVFILE}
+    echo "ESPRESSONODE_EXTRA_FLAGS=\" --backtrace-mode=full\"" >> \${ESPRESSO_ENVFILE}
+else
+    echo "ESPRESSONODE_RUST_LOG=warn" >> \${ESPRESSO_ENVFILE}
+#     echo "ESPRESSONODE_EXTRA_FLAGS= --backtrace-mode=compact" >> \${ESPRESSO_ENVFILE}
+fi
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/define-espresso-envs/up
+/etc/s6-overlay/s6-rc.d/define-espresso-envs/run.sh
+EOF
+
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/espresso-node/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/espresso-node/dependencies.d/createespressonodedb \
+    /etc/s6-overlay/s6-rc.d/espresso-node/dependencies.d/define-espresso-envs
+echo "longrun" > /etc/s6-overlay/s6-rc.d/espresso-node/type
+mkdir -p /etc/s6-overlay/s6-rc.d/espresso-node/data
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/espresso-node: /" }
+fdmove -c 2 1
+importas -S ESPRESSO_ENVFILE
+envfile \${ESPRESSO_ENVFILE}
+multisubstitute {
+    importas -S POSTGRES_ESPRESSO_DB_URL
+    importas -S ESPRESSONODE_RUST_LOG
+    importas -S ESPRESSONODE_EXTRA_FLAGS
+}
+# foreground {
+#     echo 'RUST_LOG=\${ESPRESSONODE_RUST_LOG} espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL} \${ESPRESSONODE_EXTRA_FLAGS}'
+# }
+export RUST_LOG \${ESPRESSONODE_RUST_LOG}
+export ESPRESSO_BASE_URL \${ESPRESSO_BASE_URL}
+s6-notifyoncheck -s 2000 -w 1000 -t 500 -n 10
+espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL} \${ESPRESSONODE_EXTRA_FLAGS}
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/data/check
+#!/command/execlineb -P
+with-contenv
+multisubstitute {
+    importas -S ESPRESSO_SEQUENCER_API_PORT
+}
+foreground {
+    echo "Check espresso node at http://localhost:\${ESPRESSO_SEQUENCER_API_PORT}/v0/status/block-height"
+}
+curl --silent --fail http://localhost:\${ESPRESSO_SEQUENCER_API_PORT}/v0/status/block-height 
+EOF
+
+COPY --chmod=644 <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/notification-fd
+3
+EOF
+
+################################################################################
+# Configure s6 migrate espresso
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/migrate-espresso/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/migrate-espresso/dependencies.d/migrate
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/migrate-espresso/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/migrate-espresso/run.sh
+#!/command/with-contenv sh
+cartesi-rollups-espresso-reader-db-migration
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/migrate-espresso/up
+/etc/s6-overlay/s6-rc.d/migrate-espresso/run.sh
+EOF
+
+################################################################################
 # Configure s6 espresso-reader
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/test-espresso
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/test-espresso/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/test.sh
+#!/bin/sh
+echo "Testing Espresso Dev Node at '\${ESPRESSO_BASE_URL}/v0/status/block-height'"
+sleep 1
+curl -sL \${ESPRESSO_BASE_URL}/v0/status/block-height 
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/run.sh
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/test-espresso: /" }
+fdmove -c 2 1
+loopwhilex -x 0 sh /etc/s6-overlay/s6-rc.d/test-espresso/test.sh
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/up
+/etc/s6-overlay/s6-rc.d/test-espresso/run.sh
+EOF
+
 RUN <<EOF
 mkdir -p /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d
 touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/prepare-dirs \
-    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/migrate
+    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/migrate \
+    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/migrate-espresso \
+    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/test-espresso
 echo "longrun" > /etc/s6-overlay/s6-rc.d/espresso-reader/type
 EOF
 
@@ -358,12 +608,17 @@ RUN mkdir -p /etc/s6-overlay/scripts
 ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
-
 # decide which reader to start
 if [[ \${MAIN_SEQUENCER} = espresso ]]; then
+    # if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} = "http://devnet:8545" ]]; then
+    #     touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/espresso-node
+    #     touch /etc/s6-overlay/s6-rc.d/user/contents.d/createespressonodedb
+    #     touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-espresso-envs
+    #     touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-node
+    # fi
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/test-espresso
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate-espresso
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-reader
-else
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
 fi
 EOF
 
@@ -383,9 +638,9 @@ COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-hlg-envs/run.sh
 echo "POSTGRES_GRAPHQL_DB_URL=\${CARTESI_POSTGRES_ENDPOINT}" > \${HLGRAPHQL_ENVFILE}
 sed -i -e "s/\${NODE_DB}/\${GRAPHQL_DB}/" \${HLGRAPHQL_ENVFILE}
 if [ \${CARTESI_LOG_LEVEL} = debug ]; then
-    echo "EXTRA_FLAGS=\" -d\"" >> \${HLGRAPHQL_ENVFILE}
+    echo "GRAPHQL_EXTRA_FLAGS=\" -d\"" >> \${HLGRAPHQL_ENVFILE}
 else
-echo "EXTRA_FLAGS=" >> \${HLGRAPHQL_ENVFILE}
+    echo "GRAPHQL_EXTRA_FLAGS=" >> \${HLGRAPHQL_ENVFILE}
 fi
 EOF
 
@@ -410,7 +665,7 @@ importas -S HLGRAPHQL_ENVFILE
 envfile \${HLGRAPHQL_ENVFILE}
 multisubstitute {
     importas -S POSTGRES_GRAPHQL_DB_URL
-    importas -S EXTRA_FLAGS
+    importas -S GRAPHQL_EXTRA_FLAGS
     importas POSTGRES_NODE_DB_URL CARTESI_POSTGRES_ENDPOINT
     importas -S GRAPHQL_PORT
     importas -S CARTESI_BLOCKCHAIN_WS_ENDPOINT
@@ -418,11 +673,9 @@ multisubstitute {
 }
 export POSTGRES_GRAPHQL_DB_URL \${POSTGRES_GRAPHQL_DB_URL}
 export POSTGRES_NODE_DB_URL \${POSTGRES_NODE_DB_URL}
-cartesi-rollups-hl-graphql \
-    --http-port \${GRAPHQL_PORT} \
-    --rpc-url \${CARTESI_BLOCKCHAIN_WS_ENDPOINT} \
-    --contracts-input-box-block \${CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER} \
-    \${EXTRA_FLAGS}
+export HTTP_PORT \${GRAPHQL_PORT}
+cartesi-rollups-graphql \
+    \${GRAPHQL_EXTRA_FLAGS}
 EOF
 
 # deploy script
@@ -435,8 +688,8 @@ COPY --chmod=755 <<EOF /deploy.sh
 if [ ! -z \${OWNER} ]; then
     owner_args="-o \${OWNER} -O \${OWNER}"
 fi
-if [ ! -z \${AUTHORITY_ADDRESS} ]; then
-    authority_arg="-i \${AUTHORITY_ADDRESS}"
+if [ ! -z \${CONSENSUS_ADDRESS} ]; then
+    consensus_arg="-c \${CONSENSUS_ADDRESS}"
 fi
 if [ ! -z \${EPOCH_LENGTH} ]; then
     epoch_arg="-e \${EPOCH_LENGTH}"
@@ -444,14 +697,21 @@ fi
 if [ ! -z \${SALT} ]; then
     salt_arg="--salt \${SALT}"
 fi
-cartesi-rollups-cli app deploy -t \$1 --private-key \${CARTESI_AUTH_PRIVATE_KEY} --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -p \${CARTESI_POSTGRES_ENDPOINT} \${owner_args} \${authority_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} || echo 'Not deployed'
+cartesi-rollups-cli app deploy -n \${APP_NAME} -t \$1 --private-key \${CARTESI_AUTH_PRIVATE_KEY} --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -p \${CARTESI_POSTGRES_ENDPOINT} \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} || echo 'Not deployed'
 EOF
 
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
-cartesi-rollups-cli app register -t \$1 -p \${CARTESI_POSTGRES_ENDPOINT} -a \${APPLICATION_ADDRESS} -i \${AUTHORITY_ADDRESS} \${EXTRA_ARGS} || echo 'Not registered'
+cartesi-rollups-cli app register -n \${APP_NAME} -t \$1 -p \${CARTESI_POSTGRES_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} || echo 'Not registered'
 EOF
+
+RUN <<EOF
+chown -R cartesi:cartesi /opt/cartesi
+chown -R cartesi:cartesi /etc/s6-overlay/s6-rc.d
+EOF
+
+ENV HOME=/opt/cartesi
 
 # =============================================================================
 # STAGE: rollups-node-we

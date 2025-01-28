@@ -2,7 +2,7 @@ x-env: &env
   CARTESI_AUTH_KIND: private_key
   CARTESI_POSTGRES_ENDPOINT: postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
   CARTESI_HTTP_ADDRESS: 0.0.0.0
-  CARTESI_HTTP_PORT: 10000
+  CARTESI_HTTP_PORT: 10012
   POSTGRES_PASSWORD: "password"
 
 services:
@@ -29,8 +29,42 @@ services:
       <<: *env
       POSTGRES_DB: rollupsdb
 
+  espresso:
+    # image: ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:20241120-patch3 # cartesi/sdk:0.12.0-alpha.3
+    build:
+      dockerfile_inline: |
+        # syntax=docker.io/docker/dockerfile:1.4
+        FROM ghcr.io/prototyp3-dev/test-node:test
+        ENV S6_STAGE2_HOOK=
+        RUN <<EOF
+        set -e
+        rm /etc/s6-overlay/s6-rc.d/user/contents.d/*
+        touch /etc/s6-overlay/s6-rc.d/user/contents.d/prepare-dirs \
+              /etc/s6-overlay/s6-rc.d/user/contents.d/createespressonodedb \
+              /etc/s6-overlay/s6-rc.d/user/contents.d/define-espresso-envs \
+              /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-node
+        EOF
+    networks:
+      - devnet
+    ports:
+      - 10040:10040
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:$${ESPRESSO_SEQUENCER_API_PORT}/v0/status/block-height"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      <<: *env
+      ESPRESSO_SEQUENCER_L1_PROVIDER: http://devnet:8545
+      ESPRESSO_SEQUENCER_API_PORT: 10040
+    env_file:
+     - ${ENVFILENAME}
+     
   node:
-    image: ghcr.io/prototyp3-dev/test-node:latest
+    image: ghcr.io/prototyp3-dev/test-node:test
     command: /init
     healthcheck:
       test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${CARTESI_HTTP_PORT}/healthz"]
@@ -50,6 +84,9 @@ services:
       - "8080:80"
     environment:
       <<: *env
+      ESPRESSO_BASE_URL: http://espresso:10040
+      ESPRESSO_NAMESPACE: 51025
+      ESPRESSO_STARTING_BLOCK: 1
     env_file:
      - ${ENVFILENAME}
 

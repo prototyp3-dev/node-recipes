@@ -1,7 +1,7 @@
 # syntax=docker.io/docker/dockerfile:1.4
 ARG CM_VERSION=0.18.1-rc7
 ARG CM_SNAPSHOT_VERSION=0.19-preview2
-ARG NONODO_VERSION=2.14.1-beta
+ARG NONODO_VERSION=2.17.2-beta
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
 ARG CM_CALLER_VERSION=0.2.0-rc.1
@@ -214,6 +214,9 @@ fi
 if [ ! -z \"\${DEBUG}\" ]; then
   extra_args=\"\${extra_args} --enable-debug\"
 fi
+if [ ! -z \"\${EXTRA_ARGS}\" ]; then
+  extra_args=\"\${extra_args} \${EXTRA_ARGS}\"
+fi
 exec nonodo \
   --http-rollups-port=5004 --http-port=8080 \
   --sqlite-file=\${DATA_PATH}/db/database.sqlite \
@@ -294,6 +297,9 @@ if [ ! -z \"\${CARTESI_CONTRACTS_INPUT_BOX_ADDRESS}\" ]; then
 fi
 if [ ! -z \"\${DEBUG}\" ]; then
   extra_args=\"\${extra_args} --enable-debug\"
+fi
+if [ ! -z \"\${EXTRA_ARGS}\" ]; then
+  extra_args=\"\${extra_args} \${EXTRA_ARGS}\"
 fi
 exec nonodo \
   --http-rollups-port=5004 --http-port=8081 \

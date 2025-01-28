@@ -50,6 +50,26 @@ To stop the environment just run:
 make -f node.mk stop-localhost
 ```
 
+To test with a local espresso development node first stop everything and start the database and devnet. Then, start espresso:
+
+```shell
+make -f node.mk run-devnet-localhost
+make -f node.mk run-database-localhost
+make -f node.mk run-espresso-localhost
+```
+
+Before running the node, add the `MAIN_SEQUENCER` env to .env.localhost file:
+
+```shell
+MAIN_SEQUENCER=espresso
+```
+
+Then you can start the node
+
+```shell
+make -f node.mk run-node-localhost
+```
+
 ## Testnet
 
 Create a .env.<testnet> file with:

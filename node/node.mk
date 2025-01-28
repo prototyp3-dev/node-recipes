@@ -2,6 +2,7 @@
 ENVFILE := .env
 DIR := $(shell basename ${PWD})
 IMAGE_PATH ?= '.cartesi/image'
+APP_NAME ?= ${DIR}
 
 SHELL := /bin/bash
 
@@ -15,6 +16,9 @@ run-devnet-%: ${ENVFILE}.% -%
 
 run-database-%: ${ENVFILE}.% -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d database
+
+run-espresso-%: ${ENVFILE}.% -%
+	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d espresso
 
 run-node-%: ${ENVFILE}.% -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml up -d node
@@ -31,13 +35,13 @@ deploy-%: ${ENVFILE}.% --check-envs -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/apps/${hash}
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec -u root node bash -c "chown -R cartesi:cartesi /mnt/apps/${hash}"
 	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
-	 "OWNER=${OWNER} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EPOCH_LENGTH=${EPOCH_LENGTH} SALT=${SALT} EXTRA_ARGS=${EXTRA_ARGS} \
+	 "APP_NAME=${APP_NAME} OWNER=${OWNER} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EPOCH_LENGTH=${EPOCH_LENGTH} SALT=${SALT} EXTRA_ARGS=${EXTRA_ARGS} \
 	 /deploy.sh /mnt/apps/${hash}"
 
 register-%: ${ENVFILE}.% --check-envs -%
 	@ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml cp ${IMAGE_PATH}/. node:/mnt/apps/${hash}
 	ENVFILENAME=$< docker compose -p ${DIR}${ENV} --env-file $< -f node-compose.yml exec node bash -c \
-	 "APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EXTRA_ARGS=${EXTRA_ARGS} \
+	 "APP_NAME=${APP_NAME} APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} EXTRA_ARGS=${EXTRA_ARGS} \
 	 /register.sh /mnt/apps/${hash}"
 
 ${ENVFILE}.localhost:
