@@ -10,13 +10,12 @@ ARG HLGRAPHQL_VERSION=2.3.4
 ARG TRAEFIK_VERSION=3.2.0
 ARG GOVERSION=1.23.5
 ARG GO_BUILD_PATH=/build/cartesi/go
-ARG ROLLUPSNODE_BRANCH=feature/new-build-20250124 
+ARG ROLLUPSNODE_BRANCH=v2.0.0-dev-20250128 
 ARG ROLLUPSNODE_DIR=rollups-node
 ARG ESPRESSOREADER_VERSION=2.0.1-beta
-ARG ESPRESSOREADER_BRANCH=main
+ARG ESPRESSOREADER_BRANCH=feature/adapt-node-20250128
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 ARG ESPRESSO_DEV_NODE_TAG=20241120-patch3
-
 ARG GRAPHQL_BRANCH=feature/migration-db-v2-beta
 ARG GRAPHQL_DIR=rollups-graphql
 
@@ -77,12 +76,7 @@ ARG ESPRESSOREADER_DIR
 ARG ESPRESSOREADER_BRANCH
 
 RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
-    https://github.com/Calindra/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-# RUN mkdir -p ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-# RUN wget -qO- https://github.com/Calindra/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
-#     tar xzf - --strip-components 1 -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-RUN wget -qO- https://github.com/Calindra/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/rollupsdb-postgres-bindings.tar.gz | \
-    tar xzf - -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+    https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
@@ -429,10 +423,8 @@ echo "POSTGRES_ESPRESSO_DB_URL=\${CARTESI_POSTGRES_ENDPOINT}" > \${ESPRESSO_ENVF
 sed -i -e "s/\${NODE_DB}/\${ESPRESSONODE_DB}/" \${ESPRESSO_ENVFILE}
 if [ \${CARTESI_LOG_LEVEL} = debug ]; then
     echo "ESPRESSONODE_RUST_LOG=\${CARTESI_LOG_LEVEL}" >> \${ESPRESSO_ENVFILE}
-    echo "ESPRESSONODE_EXTRA_FLAGS=\" --backtrace-mode=full\"" >> \${ESPRESSO_ENVFILE}
 else
     echo "ESPRESSONODE_RUST_LOG=warn" >> \${ESPRESSO_ENVFILE}
-#     echo "ESPRESSONODE_EXTRA_FLAGS= --backtrace-mode=compact" >> \${ESPRESSO_ENVFILE}
 fi
 EOF
 
@@ -459,7 +451,6 @@ envfile \${ESPRESSO_ENVFILE}
 multisubstitute {
     importas -S POSTGRES_ESPRESSO_DB_URL
     importas -S ESPRESSONODE_RUST_LOG
-    importas -S ESPRESSONODE_EXTRA_FLAGS
 }
 # foreground {
 #     echo 'RUST_LOG=\${ESPRESSONODE_RUST_LOG} espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL} \${ESPRESSONODE_EXTRA_FLAGS}'
@@ -467,7 +458,7 @@ multisubstitute {
 export RUST_LOG \${ESPRESSONODE_RUST_LOG}
 export ESPRESSO_BASE_URL \${ESPRESSO_BASE_URL}
 s6-notifyoncheck -s 2000 -w 1000 -t 500 -n 10
-espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL} \${ESPRESSONODE_EXTRA_FLAGS}
+espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
 EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/data/check
@@ -513,9 +504,12 @@ EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/test.sh
 #!/bin/sh
-echo "Testing Espresso Dev Node at '\${ESPRESSO_BASE_URL}/v0/status/block-height'"
+set -e
 sleep 1
-curl -sL \${ESPRESSO_BASE_URL}/v0/status/block-height 
+echo "Testing Espresso Dev Node at '\${ESPRESSO_BASE_URL}/v0/status/block-height'"
+block_height=$(curl -s -f \${ESPRESSO_BASE_URL}/v0/status/block-height )
+echo "  Waiting block height \${ESPRESSO_STARTING_BLOCK} (current \${block_height})"
+[ "\${block_height}" -ge "\${ESPRESSO_STARTING_BLOCK}" ]
 EOF
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/run.sh

@@ -50,7 +50,16 @@ To stop the environment just run:
 make -f node.mk stop-localhost
 ```
 
-To test with a local espresso development node first stop everything and start the database and devnet. Then, start espresso:
+To test with a local espresso development node, add the `MAIN_SEQUENCER` env and other espresso configurations to .env.localhost file:
+
+```shell
+MAIN_SEQUENCER=espresso
+ESPRESSO_BASE_URL=http://espresso:10040
+ESPRESSO_NAMESPACE=51025
+ESPRESSO_STARTING_BLOCK=100
+```
+
+Then you can start the database, devnet, and espresso:
 
 ```shell
 make -f node.mk run-devnet-localhost
@@ -58,16 +67,11 @@ make -f node.mk run-database-localhost
 make -f node.mk run-espresso-localhost
 ```
 
-Before running the node, add the `MAIN_SEQUENCER` env to .env.localhost file:
-
-```shell
-MAIN_SEQUENCER=espresso
-```
-
-Then you can start the node
+Finally, start the node and deploy the application
 
 ```shell
 make -f node.mk run-node-localhost
+make -f node.mk deploy-localhost 
 ```
 
 ## Testnet
@@ -80,7 +84,7 @@ CARTESI_AUTH_KIND=private_key
 CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
 CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
 MAIN_SEQUENCER=espresso
-ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network
 ESPRESSO_NAMESPACE=51025
 ESPRESSO_STARTING_BLOCK=
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
@@ -102,7 +106,7 @@ And deploy the application with (optionally set `IMAGE_PATH`):
 make -f node.mk deploy-<testnet> OWNER=<app and auth owner>
 ```
 
-You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `CONSENSUS_ADDRESS` to deploy a new application with same consensus already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
 
 To stop the environment just run:
 
@@ -113,7 +117,7 @@ make -f node.mk stop-<testnet>
 Note: If want to register an already deployed application to the node use (optionally set `IMAGE_PATH`):
 
 ```shell
-make -f node.mk register-<testnet> APPLICATION_ADDRESS=<app address> AUTHORITY_ADDRESS=<auth address> 
+make -f node.mk register-<testnet> APPLICATION_ADDRESS=<app address> CONSENSUS_ADDRESS=<auth address> 
 ```
 
 ## Deploy backend to fly.io
@@ -126,7 +130,7 @@ CARTESI_AUTH_KIND=private_key
 CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
 CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
 MAIN_SEQUENCER=espresso
-ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/
 ESPRESSO_NAMESPACE=51025
 ESPRESSO_STARTING_BLOCK=
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
@@ -249,12 +253,12 @@ Finally, run the deployment on the node:
 fly ssh console -c .fly/node/fly.toml -C "bash -c 'OWNER={OWNER} /deploy.sh /mnt/apps/$app_name'"
 ```
 
-You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `CONSENSUS_ADDRESS` to deploy a new application with same consensus already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
 
 If you have already deployed the application, you can register it to add to the node (after transfering the image).
 
 ```shell
-fly ssh console -c .fly/node/fly.toml -C "bash -c 'APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} /register.sh /mnt/apps/$app_name'"
+fly ssh console -c .fly/node/fly.toml -C "bash -c 'APPLICATION_ADDRESS=${APPLICATION_ADDRESS} CONSENSUS_ADDRESS=${CONSENSUS_ADDRESS} /register.sh /mnt/apps/$app_name'"
 ```
 
 Your application is now deployed on the node. Also note that you can deploy multiple applications on the same node.
