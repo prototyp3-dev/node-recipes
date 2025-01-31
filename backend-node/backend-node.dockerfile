@@ -10,14 +10,16 @@ ARG HLGRAPHQL_VERSION=2.3.4
 ARG TRAEFIK_VERSION=3.2.0
 ARG GOVERSION=1.23.5
 ARG GO_BUILD_PATH=/build/cartesi/go
+ARG ROLLUPSNODE_VERSION=2.0.0-dev-20250128 
 ARG ROLLUPSNODE_BRANCH=v2.0.0-dev-20250128 
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG ESPRESSOREADER_VERSION=2.0.1-beta
+ARG ESPRESSOREADER_VERSION=0.2.0-node-20250128
 ARG ESPRESSOREADER_BRANCH=feature/adapt-node-20250128
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 ARG ESPRESSO_DEV_NODE_TAG=20241120-patch3
 ARG GRAPHQL_BRANCH=feature/migration-db-v2-beta
 ARG GRAPHQL_DIR=rollups-graphql
+ARG GRAPHQL_VERSION=2.3.5-node-20250128
 
 # =============================================================================
 # STAGE: node builder
@@ -58,25 +60,39 @@ FROM go-installer AS go-builder
 
 ARG GO_BUILD_PATH
 
+WORKDIR ${GO_BUILD_PATH}
+
 ENV GOCACHE=${GO_BUILD_PATH}/.cache
 ENV GOENV=${GO_BUILD_PATH}/.config/go/env
 ENV GOPATH=${GO_BUILD_PATH}/.go
 
+ARG ROLLUPSNODE_VERSION
 ARG ROLLUPSNODE_BRANCH
 ARG ROLLUPSNODE_DIR
 
-RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
-    https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
+RUN mkdir ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
+RUN wget -qO- https://github.com/cartesi/rollups-node/archive/refs/tags/v${ROLLUPSNODE_VERSION}.tar.gz | \
+    tar -C ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} -zxf - --strip-components 1 rollups-node-${ROLLUPSNODE_VERSION}
+
+#     RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
+#     https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && make build-go
 
 ARG ESPRESSOREADER_VERSION
 ARG ESPRESSOREADER_DIR
-ARG ESPRESSOREADER_BRANCH
+# ARG ESPRESSOREADER_BRANCH
 
-RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
-    https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
+    tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
+
+# RUN wget -q https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader \
+#     -O ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-espresso-reader
+
+# RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
+#     https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
@@ -84,15 +100,20 @@ RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
     go build -o cartesi-rollups-espresso-reader-db-migration dev/migrate/main.go
 
 
-ARG GRAPHQL_BRANCH
+ARG GRAPHQL_VERSION
+# ARG GRAPHQL_BRANCH
 ARG GRAPHQL_DIR
 
-RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
-    https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+RUN mkdir ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+    tar -C ${GO_BUILD_PATH}/${GRAPHQL_DIR} -zxf - cartesi-rollups-graphql
 
-RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
-RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
-    go build -o cartesi-rollups-graphql
+# RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
+#     https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+
+# RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
+# RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
+#     go build -o cartesi-rollups-graphql
 
 
 # =============================================================================

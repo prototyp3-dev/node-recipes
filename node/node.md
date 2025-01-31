@@ -56,7 +56,7 @@ To test with a local espresso development node, add the `MAIN_SEQUENCER` env and
 MAIN_SEQUENCER=espresso
 ESPRESSO_BASE_URL=http://espresso:10040
 ESPRESSO_NAMESPACE=51025
-ESPRESSO_STARTING_BLOCK=100
+ESPRESSO_STARTING_BLOCK=101
 ```
 
 Then you can start the database, devnet, and espresso:
