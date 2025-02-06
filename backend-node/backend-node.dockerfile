@@ -16,7 +16,7 @@ ARG ROLLUPSNODE_DIR=rollups-node
 ARG ESPRESSOREADER_VERSION=0.2.0-node-20250128
 ARG ESPRESSOREADER_BRANCH=feature/adapt-node-20250128
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
-ARG ESPRESSO_DEV_NODE_TAG=20241120-patch3
+ARG ESPRESSO_DEV_NODE_TAG=20241120-patch5
 ARG GRAPHQL_BRANCH=feature/migration-db-v2-beta
 ARG GRAPHQL_DIR=rollups-graphql
 ARG GRAPHQL_VERSION=2.3.5-node-20250128
@@ -718,7 +718,10 @@ EOF
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
-cartesi-rollups-cli app register -n \${APP_NAME} -t \$1 -p \${CARTESI_POSTGRES_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} || echo 'Not registered'
+if [ ! -z \${EPOCH_LENGTH} ]; then
+    epoch_arg="-e \${EPOCH_LENGTH}"
+fi
+cartesi-rollups-cli app register -n \${APP_NAME} -t \$1 --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -p \${CARTESI_POSTGRES_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${epoch_arg} \${EXTRA_ARGS} || echo 'Not registered'
 EOF
 
 RUN <<EOF

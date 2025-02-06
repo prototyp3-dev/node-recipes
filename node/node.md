@@ -9,21 +9,21 @@ Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to 
 Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
 
 ```shell
-wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
-unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
+wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/feature/use-20250128-build.zip -O recipes.zip
+unzip -q recipes.zip "node-recipes-feature-use-20250128-build/node/*" -d . && mv node-recipes-feature-use-20250128-build/node/* . && rmdir -p node-recipes-feature-use-20250128-build/node
 rm recipes.zip
 ```
 
 Also, make sure you have the updated test node images:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-node:latest
+docker pull ghcr.io/prototyp3-dev/test-node:test
 ```
 
 And if you will run a local devnet:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-devnet:latest
+docker pull ghcr.io/prototyp3-dev/test-devnet:test
 ```
 
 ## Localhost
@@ -154,7 +154,7 @@ mkdir -p .fly/node
 
 ```toml
 [build]
-  image = "ghcr.io/prototyp3-dev/test-node-cloud:latest"
+  image = "ghcr.io/prototyp3-dev/test-node-cloud:test"
 
 [http_service]
   internal_port = 80
@@ -321,7 +321,7 @@ After a successful execution, your snapshot will be located inside `./.cartesi/i
 The following commands assumes you have the `cartesi-machine` command on your system. Alternatively, you might want to use a docker container with all required packeges and run in interactive mode:
 
 ```shell
-docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:latest bash
+docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:test bash
 ```
 
 First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/root.ext2`). Copy the base image to a working dir so you can start making changes. 
