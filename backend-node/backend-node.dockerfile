@@ -13,11 +13,11 @@ ARG GO_BUILD_PATH=/build/cartesi/go
 ARG ROLLUPSNODE_VERSION=2.0.0-dev-20250128 
 ARG ROLLUPSNODE_BRANCH=v2.0.0-dev-20250128 
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG ESPRESSOREADER_VERSION=0.2.0-node-20250128
-ARG ESPRESSOREADER_BRANCH=feature/adapt-node-20250128
+ARG ESPRESSOREADER_VERSION=0.2.2-node-20250128
+ARG ESPRESSOREADER_BRANCH=feature/adapt-node-evm-changes
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
-ARG ESPRESSO_DEV_NODE_TAG=20241120-patch5
-ARG GRAPHQL_BRANCH=feature/migration-db-v2-beta
+ARG ESPRESSO_DEV_NODE_TAG=20241120-patch6
+ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
 ARG GRAPHQL_VERSION=2.3.5-node-20250128
 
@@ -74,7 +74,7 @@ RUN mkdir ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
 RUN wget -qO- https://github.com/cartesi/rollups-node/archive/refs/tags/v${ROLLUPSNODE_VERSION}.tar.gz | \
     tar -C ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} -zxf - --strip-components 1 rollups-node-${ROLLUPSNODE_VERSION}
 
-#     RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
+# RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
 #     https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && go mod download
@@ -82,17 +82,17 @@ RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && make build-go
 
 ARG ESPRESSOREADER_VERSION
 ARG ESPRESSOREADER_DIR
-# ARG ESPRESSOREADER_BRANCH
+ARG ESPRESSOREADER_BRANCH
 
 RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
-    tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
+# RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
+#     tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
 
 # RUN wget -q https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader \
 #     -O ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-espresso-reader
 
-# RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
-#     https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
+    https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
@@ -101,19 +101,19 @@ RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
 
 
 ARG GRAPHQL_VERSION
-# ARG GRAPHQL_BRANCH
+ARG GRAPHQL_BRANCH
 ARG GRAPHQL_DIR
 
-RUN mkdir ${GO_BUILD_PATH}/${GRAPHQL_DIR}
-RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
-    tar -C ${GO_BUILD_PATH}/${GRAPHQL_DIR} -zxf - cartesi-rollups-graphql
+# RUN mkdir ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+# RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+#     tar -C ${GO_BUILD_PATH}/${GRAPHQL_DIR} -zxf - cartesi-rollups-graphql
 
-# RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
-#     https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
+    https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
 
-# RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
-# RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
-#     go build -o cartesi-rollups-graphql
+RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
+RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
+    go build -o cartesi-rollups-graphql
 
 
 # =============================================================================
@@ -133,6 +133,7 @@ ENV BASE_PATH=${BASE_PATH}
 
 ENV SNAPSHOTS_APPS_PATH=${BASE_PATH}/apps
 ENV NODE_PATH=${BASE_PATH}/node
+ENV ESPRESSO_PATH=${BASE_PATH}/espresso
 
 # Download system dependencies required at runtime.
 ARG DEBIAN_FRONTEND=noninteractive
@@ -143,7 +144,7 @@ RUN <<EOF
         ca-certificates curl procps \
         xz-utils nginx postgresql-client
     rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
-    mkdir -p ${NODE_PATH}/snapshots ${NODE_PATH}/data
+    mkdir -p ${NODE_PATH}/snapshots ${NODE_PATH}/data ${ESPRESSO_PATH}
     chown -R cartesi:cartesi ${NODE_PATH}
 EOF
 
@@ -326,6 +327,7 @@ COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
 mkdir -p "${SNAPSHOTS_APPS_PATH}"
 mkdir -p "${NODE_PATH}"/snapshots
 mkdir -p "${NODE_PATH}"/data
+mkdir -p "${ESPRESSO_PATH}"
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/up
@@ -442,6 +444,7 @@ COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-espresso-envs/run.sh
 #!/command/with-contenv sh
 echo "POSTGRES_ESPRESSO_DB_URL=\${CARTESI_POSTGRES_ENDPOINT}" > \${ESPRESSO_ENVFILE}
 sed -i -e "s/\${NODE_DB}/\${ESPRESSONODE_DB}/" \${ESPRESSO_ENVFILE}
+sed -i -e "s/?sslmode=disable//" \${ESPRESSO_ENVFILE}
 if [ \${CARTESI_LOG_LEVEL} = debug ]; then
     echo "ESPRESSONODE_RUST_LOG=\${CARTESI_LOG_LEVEL}" >> \${ESPRESSO_ENVFILE}
 else
@@ -481,6 +484,7 @@ export ESPRESSO_BASE_URL \${ESPRESSO_BASE_URL}
 s6-notifyoncheck -s 2000 -w 1000 -t 500 -n 10
 espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
 EOF
+# espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
 
 COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/data/check
 #!/command/execlineb -P
