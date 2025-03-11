@@ -7,8 +7,8 @@ x-env: &env
 
 services:
   devnet:
-    image: ghcr.io/prototyp3-dev/test-devnet:latest
-    command: ["anvil", "--block-time", "2", "--host", "0.0.0.0", "--load-state", "/usr/share/devnet/anvil_state.json"]
+    image: ghcr.io/prototyp3-dev/test-devnet:test
+    # command: ["anvil", "--block-time", "2", "--host", "0.0.0.0", "--load-state", "/usr/share/devnet/anvil_state.json"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8545/ -H 'Content-Type: application/json' -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":67}'"]
       interval: 1s

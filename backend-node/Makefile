@@ -38,8 +38,7 @@ devnet-image:
 	IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag
-	curl -s -L https://raw.githubusercontent.com/cartesi/rollups-node/refs/heads/feature/new-build/test/devnet/Dockerfile -o ${TMP}
-	docker build -f ${TMP} --target rollups-node-devnet . \
+	docker build -f devnet.dockerfile . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-devnet" \
 		--label "org.opencontainers.image.description=Test Devnet" \
@@ -48,7 +47,6 @@ devnet-image:
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
-	rm -rf ${TMP}
 
 nonode-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}

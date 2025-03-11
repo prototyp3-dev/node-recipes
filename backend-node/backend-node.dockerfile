@@ -13,13 +13,13 @@ ARG GO_BUILD_PATH=/build/cartesi/go
 ARG ROLLUPSNODE_VERSION=2.0.0-dev-20250128 
 ARG ROLLUPSNODE_BRANCH=v2.0.0-dev-20250128 
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG ESPRESSOREADER_VERSION=0.2.2-node-20250128
+ARG ESPRESSOREADER_VERSION=0.2.3-node-20250128
 ARG ESPRESSOREADER_BRANCH=feature/adapt-node-evm-changes
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 ARG ESPRESSO_DEV_NODE_TAG=20241120-patch6
 ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
-ARG GRAPHQL_VERSION=2.3.5-node-20250128
+ARG GRAPHQL_VERSION=2.3.10-node-20250128
 
 # =============================================================================
 # STAGE: node builder
@@ -85,14 +85,14 @@ ARG ESPRESSOREADER_DIR
 ARG ESPRESSOREADER_BRANCH
 
 RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-# RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
-#     tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
+RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
+    tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
 
 # RUN wget -q https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader \
 #     -O ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-espresso-reader
 
-RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
-    https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+# RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
+#     https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
@@ -104,16 +104,16 @@ ARG GRAPHQL_VERSION
 ARG GRAPHQL_BRANCH
 ARG GRAPHQL_DIR
 
-# RUN mkdir ${GO_BUILD_PATH}/${GRAPHQL_DIR}
-# RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
-#     tar -C ${GO_BUILD_PATH}/${GRAPHQL_DIR} -zxf - cartesi-rollups-graphql
+RUN mkdir ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+    tar -C ${GO_BUILD_PATH}/${GRAPHQL_DIR} -zxf - cartesi-rollups-graphql
 
-RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
-    https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
+# RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
+#     https://github.com/cartesi/rollups-graphql.git ${GO_BUILD_PATH}/${GRAPHQL_DIR}
 
-RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
-RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
-    go build -o cartesi-rollups-graphql
+# RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && go mod download
+# RUN cd ${GO_BUILD_PATH}/${GRAPHQL_DIR} && \
+#     go build -o cartesi-rollups-graphql
 
 
 # =============================================================================
@@ -716,7 +716,13 @@ fi
 if [ ! -z \${SALT} ]; then
     salt_arg="--salt \${SALT}"
 fi
-cartesi-rollups-cli app deploy -n \${APP_NAME} -t \$1 --private-key \${CARTESI_AUTH_PRIVATE_KEY} --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -p \${CARTESI_POSTGRES_ENDPOINT} \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} || echo 'Not deployed'
+if [ ! -z \${APPLICATION_FACTORY_ADDRESS} ]; then
+    app_fac_arg="--app-factory \${APPLICATION_FACTORY_ADDRESS}"
+fi
+if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
+    auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
+fi
+cartesi-rollups-cli app deploy -n \${APP_NAME} -t \$1 --private-key \${CARTESI_AUTH_PRIVATE_KEY} --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -p \${CARTESI_POSTGRES_ENDPOINT} \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${EXTRA_ARGS} || echo 'Not deployed'
 EOF
 
 

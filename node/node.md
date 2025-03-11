@@ -36,7 +36,7 @@ make -f node.mk run-database-localhost
 make -f node.mk run-node-localhost
 ```
 
-With the infrastructure running, you can deploy the application with
+With the infrastructure running, you can deploy the application with (note: it may take a few seconds to deploy all cartesi rollups contracts)
 
 ```shell
 make -f node.mk deploy-localhost 
@@ -56,7 +56,7 @@ To test with a local espresso development node, add the `MAIN_SEQUENCER` env and
 MAIN_SEQUENCER=espresso
 ESPRESSO_BASE_URL=http://espresso:10040
 ESPRESSO_NAMESPACE=51025
-ESPRESSO_STARTING_BLOCK=10
+ESPRESSO_STARTING_BLOCK=2
 ```
 
 Then you can start the database, devnet, and espresso:
