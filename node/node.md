@@ -9,8 +9,8 @@ Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to 
 Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
 
 ```shell
-wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/feature/use-20250128-build.zip -O recipes.zip
-unzip -q recipes.zip "node-recipes-feature-use-20250128-build/node/*" -d . && mv node-recipes-feature-use-20250128-build/node/* . && rmdir -p node-recipes-feature-use-20250128-build/node
+wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/feature/use-v0.2.3-node-20250128.zip -O recipes.zip
+unzip -q recipes.zip "node-recipes-feature-use-v0.2.3-node-20250128/node/*" -d . && mv node-recipes-feature-use-v0.2.3-node-20250128/node/* . && rmdir -p node-recipes-feature-use-v0.2.3-node-20250128/node
 rm recipes.zip
 ```
 
