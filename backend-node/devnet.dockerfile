@@ -90,8 +90,9 @@ ENV PATH="$PATH:/foundry/bin"
 WORKDIR ${CARTESI_ROLLUPS_DIR}
 COPY <<EOF ${CARTESI_ROLLUPS_DIR}/build-cannon.sh
 anvil_params="--host 0.0.0.0 --block-time 2"
-cannon_params="--skip-compile"
-exit=
+cannon_params="--skip-compile --wipe"
+kill_anvil=
+keep_alive=true
 
 trap stop_anvil 1 2 3 6
 
@@ -102,7 +103,7 @@ stop_anvil() {
     exit 0
 }
 
-while getopts "xa:c:" flag; do
+while getopts "kxa:c:" flag; do
     case \$flag in
         a)
         anvil_params=\$OPTARG
@@ -111,7 +112,10 @@ while getopts "xa:c:" flag; do
         cannon_params=$\OPTARG
         ;;
         x)
-        exit=true
+        kill_anvil=true
+        ;;
+        k)
+        keep_alive=false
         ;;
         \?)
         echo Invalid option: \$flag
@@ -122,11 +126,14 @@ done
 anvil --hardfork paris \$anvil_params > /tmp/anvil.log 2>&1 & anvil_pid=\$!
 timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
 curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8545 --data '{"jsonrpc":"2.0","method":"anvil_setCode","params":["0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7","0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"],"id":67}'
-cannon build --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
-if [ -z \$exit ]; then
-    tail -f /tmp/anvil.log
+cannon build --anvil.hardfork paris --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
+if [ ! -z \$kill_anvil ]; then
+    stop_anvil
+else
+    if [[ \$keep_alive = 'true' ]]; then
+        tail -f /tmp/anvil.log
+    fi
 fi
-stop_anvil
 EOF
 
 RUN bash ${CARTESI_ROLLUPS_DIR}/build-cannon.sh -x -a "" -c "--dry-run -w deployments/localhost"
