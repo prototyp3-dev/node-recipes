@@ -250,7 +250,7 @@ fly sftp shell -c .fly/node/fly.toml
 Finally, run the deployment on the node: 
 
 ```shell
-fly ssh console -c .fly/node/fly.toml -C "bash -c 'OWNER={OWNER} /deploy.sh /mnt/apps/$app_name'"
+fly ssh console -c .fly/node/fly.toml -C "bash -c 'APP_NAME=$app_name OWNER={OWNER} /deploy.sh /mnt/apps/$app_name'"
 ```
 
 You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `CONSENSUS_ADDRESS` to deploy a new application with same consensus already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
