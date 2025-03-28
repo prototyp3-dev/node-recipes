@@ -19,7 +19,7 @@ ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 ARG ESPRESSO_DEV_NODE_TAG=20241120-patch6
 ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
-ARG GRAPHQL_VERSION=2.3.10-node-20250128
+ARG GRAPHQL_VERSION=2.3.11-node-20250128
 
 # =============================================================================
 # STAGE: node builder
