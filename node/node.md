@@ -17,13 +17,13 @@ rm recipes.zip
 Also, make sure you have the updated test node images:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-node:test
+docker pull ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
 ```
 
 And if you will run a local devnet:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-devnet:test
+docker pull ghcr.io/prototyp3-dev/test-devnet:2.0.0-alpha
 ```
 
 ## Localhost
@@ -137,10 +137,10 @@ CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
 CARTESI_BLOCKCHAIN_WS_ENDPOINT=
 CARTESI_BLOCKCHAIN_ID=
 CARTESI_AUTH_PRIVATE_KEY=
-CARTESI_POSTGRES_ENDPOINT=
+CARTESI_DATABASE_CONNECTION=
 ```
 
-Note that the value of `CARTESI_POSTGRES_ENDPOINT` will be provided on the Step 3.
+Note that the value of `CARTESI_DATABASE_CONNECTION` will be provided on the Step 3.
 
 Then follow these steps to deploy on fly
 
@@ -154,7 +154,7 @@ mkdir -p .fly/node
 
 ```toml
 [build]
-  image = "ghcr.io/prototyp3-dev/test-node-cloud:test"
+  image = "ghcr.io/prototyp3-dev/test-node-cloud:2.0.0-alpha"
 
 [http_service]
   internal_port = 80
@@ -190,7 +190,7 @@ We suggest creating a persistent volume to store the snapshots, so you wouldn't 
 fly ext supabase create
 ```
 
-Make sure to add the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file.
+Make sure to add the value of `CARTESI_DATABASE_CONNECTION` variable to your environment file.
 
 You can also use the `fly postgres` to create the database:
 
@@ -198,7 +198,7 @@ You can also use the `fly postgres` to create the database:
 fly postgres create
 ```
 
-Similarly, make sure to set the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
+Similarly, make sure to set the value of `CARTESI_DATABASE_CONNECTION` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
 
 ```shell
 postgres://{username}:{password}@{hostname}:{port}/postgres?sslmode=disable
@@ -321,7 +321,7 @@ After a successful execution, your snapshot will be located inside `./.cartesi/i
 The following commands assumes you have the `cartesi-machine` command on your system. Alternatively, you might want to use a docker container with all required packeges and run in interactive mode:
 
 ```shell
-docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:test bash
+docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:2.0.0-alpha bash
 ```
 
 First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/root.ext2`). Copy the base image to a working dir so you can start making changes. 

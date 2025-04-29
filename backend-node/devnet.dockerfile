@@ -3,8 +3,8 @@
 
 ARG FOUNDRY_DIR=/foundry
 ARG CARTESI_ROLLUPS_DIR=/opt/cartesi/rollups-contracts
-ARG CARTESI_ROLLUPS_BRANCH=v2.0.0-rc.12
-ARG CARTESI_ROLLUPS_VERSION=2.0.0-rc.12
+# ARG CARTESI_ROLLUPS_BRANCH=v2.0.0-rc.17
+ARG CARTESI_ROLLUPS_VERSION=2.0.0-rc.17
 ARG CANNON_DIRECTORY=/cannon
 
 
@@ -38,7 +38,7 @@ RUN curl -L https://foundry.paradigm.xyz | bash
 RUN ${FOUNDRY_DIR}/bin/foundryup -i stable
 
 ARG CARTESI_ROLLUPS_DIR
-ARG CARTESI_ROLLUPS_BRANCH
+# ARG CARTESI_ROLLUPS_BRANCH
 ARG CARTESI_ROLLUPS_VERSION
 
 RUN mkdir -p ${CARTESI_ROLLUPS_DIR}
@@ -55,32 +55,32 @@ RUN curl -s -L https://github.com/cartesi/rollups-contracts/archive/refs/tags/v$
 RUN cd ${CARTESI_ROLLUPS_DIR} && pnpm i
 
 # install forge dependencies
-RUN cd ${CARTESI_ROLLUPS_DIR} && ${FOUNDRY_DIR}/bin/forge install --no-git foundry-rs/forge-std@bb4ceea
+RUN cd ${CARTESI_ROLLUPS_DIR} && ${FOUNDRY_DIR}/bin/forge soldeer install
 
-# make build generate the same artifact as hardhat
-RUN <<EOF
-set -e
-sed -i -e 's/libs = .*/libs = ["@cartesi", "@openzeppelin", "forge-std"]/' ${CARTESI_ROLLUPS_DIR}/foundry.toml
-sed -i -e 's/\[profile.default\]/[profile.default]\nevm_version = "paris"\noptimizer = true\nuse_literal_content = true\nauto_detect_remappings = false/' ${CARTESI_ROLLUPS_DIR}/foundry.toml
-EOF
+# # make build generate the same artifact as hardhat
+# RUN <<EOF
+# set -e
+# sed -i -e 's/libs = .*/libs = ["@cartesi", "@openzeppelin", "forge-std"]/' ${CARTESI_ROLLUPS_DIR}/foundry.toml
+# sed -i -e 's/\[profile.default\]/[profile.default]\nevm_version = "paris"\noptimizer = true\nuse_literal_content = true\nauto_detect_remappings = false/' ${CARTESI_ROLLUPS_DIR}/foundry.toml
+# EOF
 
-RUN rm ${CARTESI_ROLLUPS_DIR}/remappings.txt
+# RUN rm ${CARTESI_ROLLUPS_DIR}/remappings.txt
 
-RUN <<EOF
-set -e
-ln -s ${CARTESI_ROLLUPS_DIR}/node_modules/@cartesi ${CARTESI_ROLLUPS_DIR}/@cartesi
-ln -s ${CARTESI_ROLLUPS_DIR}/node_modules/@openzeppelin ${CARTESI_ROLLUPS_DIR}/@openzeppelin
-ln -s ${CARTESI_ROLLUPS_DIR}/lib/forge-std/src ${CARTESI_ROLLUPS_DIR}/forge-std
-EOF
+# RUN <<EOF
+# set -e
+# ln -s ${CARTESI_ROLLUPS_DIR}/node_modules/@cartesi ${CARTESI_ROLLUPS_DIR}/@cartesi
+# ln -s ${CARTESI_ROLLUPS_DIR}/node_modules/@openzeppelin ${CARTESI_ROLLUPS_DIR}/@openzeppelin
+# ln -s ${CARTESI_ROLLUPS_DIR}/lib/forge-std/src ${CARTESI_ROLLUPS_DIR}/forge-std
+# EOF
 
-# cannon configuration
-RUN <<EOF
-set -e
-curl -s -L https://github.com/cartesi/rollups-contracts/raw/refs/heads/main/cannonfile.toml \
-    -o ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
-sed -i -e "s/version = \".*\"/version = \"${CARTESI_ROLLUPS_VERSION}\"/" ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
-sed -i -e 's/true/"0xE1CB04A0fA36DdD16a06ea828007E35e1a3cBC37"/g' ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
-EOF
+# # cannon configuration
+# RUN <<EOF
+# set -e
+# curl -s -L https://github.com/cartesi/rollups-contracts/raw/refs/heads/main/cannonfile.toml \
+#     -o ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
+# sed -i -e "s/version = \".*\"/version = \"${CARTESI_ROLLUPS_VERSION}\"/" ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
+# sed -i -e 's/true/"0xE1CB04A0fA36DdD16a06ea828007E35e1a3cBC37"/g' ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
+# EOF
 
 ARG CANNON_DIRECTORY
 ENV CANNON_DIRECTORY=${CANNON_DIRECTORY}
@@ -103,7 +103,7 @@ stop_anvil() {
     exit 0
 }
 
-while getopts "kxa:c:" flag; do
+while getopts "kxra:c:" flag; do
     case \$flag in
         a)
         anvil_params=\$OPTARG
@@ -117,16 +117,20 @@ while getopts "kxa:c:" flag; do
         k)
         keep_alive=false
         ;;
+        r)
+        cannon cartesi-rollups:${CARTESI_ROLLUPS_VERSION} $\ARGS
+        exit 0
+        ;;
         \?)
         echo Invalid option: \$flag
         exit 1
         ;;
     esac
 done
-anvil --hardfork paris \$anvil_params > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+anvil \$anvil_params > /tmp/anvil.log 2>&1 & anvil_pid=\$!
 timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
 curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8545 --data '{"jsonrpc":"2.0","method":"anvil_setCode","params":["0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7","0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"],"id":67}'
-cannon build --anvil.hardfork paris --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
+cannon build --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
 if [ ! -z \$kill_anvil ]; then
     stop_anvil
 else

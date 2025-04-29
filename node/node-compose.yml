@@ -1,13 +1,13 @@
 x-env: &env
   CARTESI_AUTH_KIND: private_key
-  CARTESI_POSTGRES_ENDPOINT: postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
+  CARTESI_DATABASE_CONNECTION: postgres://postgres:password@database:5432/rollupsdb?sslmode=disable
   CARTESI_HTTP_ADDRESS: 0.0.0.0
   CARTESI_HTTP_PORT: 10012
   POSTGRES_PASSWORD: "password"
 
 services:
   devnet:
-    image: ghcr.io/prototyp3-dev/test-devnet:test
+    image: ghcr.io/prototyp3-dev/test-devnet:2.0.0-rc.17
     # command: ["anvil", "--block-time", "2", "--host", "0.0.0.0", "--load-state", "/usr/share/devnet/anvil_state.json"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8545/ -H 'Content-Type: application/json' -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":67}'"]
@@ -40,7 +40,10 @@ services:
     build:
       dockerfile_inline: |
         # syntax=docker.io/docker/dockerfile:1.4
-        FROM ghcr.io/prototyp3-dev/test-node:test
+        FROM ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
+        USER root
+        ENV AZTEC_SRS_PATH=/kzg10-aztec20-srs-1048584.bin
+        RUN curl -LO https://github.com/EspressoSystems/ark-srs/releases/download/v0.2.0/$$AZTEC_SRS_PATH
         ENV S6_STAGE2_HOOK=
         RUN <<EOF
         set -e
@@ -79,7 +82,7 @@ services:
      - ${ENVFILENAME}
 
   node:
-    image: ghcr.io/prototyp3-dev/test-node:test
+    image: ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
     command: /init
     healthcheck:
       test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${CARTESI_HTTP_PORT}/healthz"]
