@@ -7,17 +7,17 @@ ARG EMULATOR_VERSION=0.19.0
 ARG EMULATOR_VERSION_SUFFIX=-alpha3
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG HLGRAPHQL_VERSION=2.3.4
+ARG HLGRAPHQL_VERSION=2.3.13
 ARG TRAEFIK_VERSION=3.2.0
-ARG GOVERSION=1.23.5
+ARG GOVERSION=1.24.3
 ARG GO_BUILD_PATH=/build/cartesi/go
 ARG ROLLUPSNODE_VERSION=2.0.0-alpha.4
 ARG ROLLUPSNODE_BRANCH=next/2.0
 ARG ROLLUPSNODE_DIR=rollups-node
 ARG ESPRESSOREADER_VERSION=0.2.3-node-20250128
-ARG ESPRESSOREADER_BRANCH=feature/adapt-node-alpha4
+ARG ESPRESSOREADER_BRANCH=fix/ci-espresso-node-pos
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
-ARG ESPRESSO_DEV_NODE_TAG=20241120-patch6
+ARG ESPRESSO_DEV_NODE_TAG=20250428-dev-node-decaf-pos
 ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
 ARG GRAPHQL_VERSION=2.3.13
@@ -153,7 +153,7 @@ RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
 # https://github.com/EspressoSystems/espresso-sequencer/pkgs/container/espresso-sequencer%2Fespresso-dev-node
 FROM ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:${ESPRESSO_DEV_NODE_TAG} AS espresso-dev-node
 
-FROM debian:12-slim AS base-rollups-node-we
+FROM postgres:17-bookworm AS base-rollups-node-we
 # FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS base-rollups-node-we
 
 ARG BASE_PATH=/mnt
@@ -531,7 +531,7 @@ multisubstitute {
 # }
 export RUST_LOG \${ESPRESSONODE_RUST_LOG}
 s6-notifyoncheck -s 2000 -w 1000 -t 500 -n 10
-espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
+espresso-dev-node
 EOF
 # espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
 
@@ -770,7 +770,8 @@ cartesi-rollups-graphql \
     \${GRAPHQL_EXTRA_FLAGS}
 EOF
 
-# deploy script
+################################################################################
+# deploy and register scripts
 RUN <<EOF
 chown -R cartesi:cartesi /mnt
 EOF
@@ -796,16 +797,15 @@ if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
     auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
 fi
 if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    da_arg="-D \$(cast calldata "InputBoxAndEspresso(address,uint256,uint32)" \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
+    da_arg="-D \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
 fi
 cartesi-rollups-cli app deploy -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} -t \$1 || echo 'Not deployed'
 EOF
 
-
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
 if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    da_arg="-D \$(cast calldata "InputBoxAndEspresso(address,uint256,uint32)" \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
+    da_arg="-D \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
 fi
 cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${da_arg} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
 EOF
