@@ -14,13 +14,13 @@ ARG GO_BUILD_PATH=/build/cartesi/go
 ARG ROLLUPSNODE_VERSION=2.0.0-alpha.4
 ARG ROLLUPSNODE_BRANCH=next/2.0
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG ESPRESSOREADER_VERSION=0.2.3-node-20250128
-ARG ESPRESSOREADER_BRANCH=fix/ci-espresso-node-pos
+ARG ESPRESSOREADER_VERSION=0.3.0
+ARG ESPRESSOREADER_BRANCH=feature/alchemy-free-tier
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 ARG ESPRESSO_DEV_NODE_TAG=20250428-dev-node-decaf-pos
 ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
-ARG GRAPHQL_VERSION=2.3.13
+ARG GRAPHQL_VERSION=2.3.14
 ARG FOUNDRY_DIR=/foundry
 
 # =============================================================================
@@ -200,6 +200,7 @@ dpkg -i /tmp/cartesi-machine.deb
 rm /tmp/cartesi-machine.deb
 EOF
 
+# install cartesi-rollups
 ARG ROLLUPSNODE_VERSION
 RUN <<EOF
 set -e
@@ -804,10 +805,7 @@ EOF
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
-if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    da_arg="-D \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
-fi
-cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${da_arg} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
+cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
 EOF
 
 WORKDIR /opt/cartesi

@@ -9,8 +9,8 @@ Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to 
 Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
 
 ```shell
-wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/feature/use-v0.2.3-node-20250128.zip -O recipes.zip
-unzip -q recipes.zip "node-recipes-feature-use-v0.2.3-node-20250128/node/*" -d . && mv node-recipes-feature-use-v0.2.3-node-20250128/node/* . && rmdir -p node-recipes-feature-use-v0.2.3-node-20250128/node
+wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/feature/v2-alpha.zip -O recipes.zip
+unzip -q recipes.zip "node-recipes-feature-v2-alpha/node/*" -d . && mv node-recipes-feature-v2-alpha/node/* . && rmdir -p node-recipes-feature-v2-alpha/node
 rm recipes.zip
 ```
 
@@ -131,10 +131,14 @@ Go to the directory containing your project. You should create a `.env.<testnet>
 ```shell
 CARTESI_LOG_LEVEL=info
 CARTESI_AUTH_KIND=private_key
-CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
-CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xB6b39Fb3dD926A9e3FBc7A129540eEbeA3016a6c
+CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0x451f57Ca716046D114Ab9ff23269a2F9F4a1bdaF
+CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0x2210ad1d9B0bD2D470c2bfA4814ab6253BC421A0
+CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x4a409e1CaB9229711C4e1f68625DdbC75809e721
 MAIN_SEQUENCER=espresso
-ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/
+CARTESI_FEATURE_GRAPHQL_ENABLED=true
+CARTESI_FEATURE_RPC_ENABLED=true
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network
 ESPRESSO_NAMESPACE=51025
 ESPRESSO_STARTING_BLOCK=
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
