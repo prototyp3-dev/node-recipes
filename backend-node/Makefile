@@ -34,8 +34,7 @@ node-cloud-image:
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
 devnet-image:
-	$(eval TMP := $(shell mktemp -u --suffix=.dockerfile))
-	IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
+	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag
 	docker build -f devnet.dockerfile . \
@@ -47,6 +46,9 @@ devnet-image:
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
+	docker run -it --rm $$IMAGE_TAG cat /usr/share/devnet/espresso-deployment.json | tail -n +1 | jq -r 'keys[] as $$k | "\(.[$$k] | .name): \($$k)"' | grep -v "null" > .devnet_espresso_deployment.txt
+	echo "Espresso deployment:"
+	cat .devnet_espresso_deployment.txt
 
 nonode-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}

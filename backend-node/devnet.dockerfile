@@ -2,11 +2,46 @@
 # SPDX-License-Identifier: Apache-2.0 (see LICENSE)
 
 ARG FOUNDRY_DIR=/foundry
+ARG FOUNDRY_VERSION=1.2.1
 ARG CARTESI_ROLLUPS_DIR=/opt/cartesi/rollups-contracts
-# ARG CARTESI_ROLLUPS_BRANCH=v2.0.0-rc.17
-ARG CARTESI_ROLLUPS_VERSION=2.0.0-rc.17
+# ARG CARTESI_ROLLUPS_BRANCH=v2.0.0-rc.18
+ARG CARTESI_ROLLUPS_VERSION=2.0.0
 ARG CANNON_DIRECTORY=/cannon
+ARG STATE_FILE=/usr/share/devnet/anvil_state.json
+ARG ESPRESSO_DEPLOYMENT_FILE=/usr/share/devnet/espresso-deployment.json
+ARG ESPRESSO_DEV_NODE_TAG=20250528
 
+FROM ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:${ESPRESSO_DEV_NODE_TAG} AS espresso-dev-node
+
+RUN <<EOF
+apt update
+apt install -y --no-install-recommends \
+    git
+EOF
+
+ARG FOUNDRY_VERSION
+ARG FOUNDRY_DIR
+ENV FOUNDRY_DIR=${FOUNDRY_DIR}
+RUN mkdir -p ${FOUNDRY_DIR}
+RUN curl -L https://foundry.paradigm.xyz | bash
+RUN ${FOUNDRY_DIR}/bin/foundryup -i ${FOUNDRY_VERSION}
+
+ARG STATE_FILE
+ARG ESPRESSO_DEPLOYMENT_FILE
+
+RUN mkdir -p $(dirname ${STATE_FILE}) && \
+    mkdir -p $(dirname ${ESPRESSO_DEPLOYMENT_FILE})
+COPY --chmod=755 <<EOF /dump-devnet-state.sh
+#!/bin/bash
+set -e
+${FOUNDRY_DIR}/bin/anvil --dump-state ${STATE_FILE} > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
+RUST_LOG=0 espresso-dev-node --l1-deployment dump > ${ESPRESSO_DEPLOYMENT_FILE}
+kill \$anvil_pid
+wait \$anvil_pid
+EOF
+
+RUN bash /dump-devnet-state.sh
 
 # syntax=docker.io/docker/dockerfile:1
 FROM node:22-slim AS base
@@ -31,11 +66,12 @@ FROM base AS install
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y --no-install-recommends git
 
+ARG FOUNDRY_VERSION
 ARG FOUNDRY_DIR
 ENV FOUNDRY_DIR=${FOUNDRY_DIR}
 RUN mkdir -p ${FOUNDRY_DIR}
 RUN curl -L https://foundry.paradigm.xyz | bash
-RUN ${FOUNDRY_DIR}/bin/foundryup -i stable
+RUN ${FOUNDRY_DIR}/bin/foundryup -i ${FOUNDRY_VERSION}
 
 ARG CARTESI_ROLLUPS_DIR
 # ARG CARTESI_ROLLUPS_BRANCH
@@ -85,31 +121,38 @@ RUN cd ${CARTESI_ROLLUPS_DIR} && ${FOUNDRY_DIR}/bin/forge soldeer install
 ARG CANNON_DIRECTORY
 ENV CANNON_DIRECTORY=${CANNON_DIRECTORY}
 RUN mkdir -p ${CANNON_DIRECTORY}
-ENV PATH="$PATH:/foundry/bin"
+ENV PATH="$PATH:/$FOUNDRY_DIR/bin"
 
 WORKDIR ${CARTESI_ROLLUPS_DIR}
-COPY <<EOF ${CARTESI_ROLLUPS_DIR}/build-cannon.sh
-anvil_params="--host 0.0.0.0 --block-time 2"
+COPY --chmod=755 <<EOF ${CARTESI_ROLLUPS_DIR}/devnet.sh
+#!/bin/bash
+set -e
+anvil_params="--host 0.0.0.0 --block-time 2 --slots-in-an-epoch 1"
 cannon_params="--skip-compile --wipe"
 kill_anvil=
 keep_alive=true
+state_file=
 
 trap stop_anvil 1 2 3 6
 
 stop_anvil() {
     if [ ! -z \$anvil_pid ]; then
         kill \$anvil_pid
+        wait \$anvil_pid
     fi
     exit 0
 }
 
-while getopts "kxra:c:" flag; do
+while getopts "kxra:c:s:" flag; do
     case \$flag in
         a)
         anvil_params=\$OPTARG
         ;;
         c)
         cannon_params=$\OPTARG
+        ;;
+        s)
+        state_file=$\OPTARG
         ;;
         x)
         kill_anvil=true
@@ -127,10 +170,15 @@ while getopts "kxra:c:" flag; do
         ;;
     esac
 done
-anvil \$anvil_params > /tmp/anvil.log 2>&1 & anvil_pid=\$!
-timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
-curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8545 --data '{"jsonrpc":"2.0","method":"anvil_setCode","params":["0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7","0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"],"id":67}'
-cannon build --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
+if [ ! -z \$state_file ]; then
+    anvil --load-state \$state_file \$anvil_params > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+    timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
+else
+    anvil \$anvil_params > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+    timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
+    # curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8545 --data '{"jsonrpc":"2.0","method":"anvil_setCode","params":["0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7","0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"],"id":67}'
+    cannon build --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
+fi
 if [ ! -z \$kill_anvil ]; then
     stop_anvil
 else
@@ -140,7 +188,11 @@ else
 fi
 EOF
 
-RUN bash ${CARTESI_ROLLUPS_DIR}/build-cannon.sh -x -a "" -c "--dry-run -w deployments/localhost"
+ARG STATE_FILE
+COPY --from=espresso-dev-node ${STATE_FILE} ${STATE_FILE}.bkp
+
+# RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x -a "" -c "--dry-run -w  deployments/localhost --impersonate 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x -a "--load-state ${STATE_FILE}.bkp --dump-state ${STATE_FILE}" -c "-w  deployments/localhost"
 
 FROM base
 
@@ -155,6 +207,16 @@ COPY --from=install ${FOUNDRY_DIR}/* /usr/local/bin/
 COPY --from=install ${CANNON_DIRECTORY} ${CANNON_DIRECTORY}
 COPY --from=install ${CARTESI_ROLLUPS_DIR} ${CARTESI_ROLLUPS_DIR}
 
+ARG STATE_FILE
+ARG ESPRESSO_DEPLOYMENT_FILE
+COPY --from=install ${STATE_FILE} ${STATE_FILE}
+COPY --from=espresso-dev-node ${STATE_FILE} ${STATE_FILE}.bkp
+COPY --from=espresso-dev-node ${ESPRESSO_DEPLOYMENT_FILE} ${ESPRESSO_DEPLOYMENT_FILE}
+
+RUN ln -s ${CARTESI_ROLLUPS_DIR}/devnet.sh /usr/local/bin/devnet.sh
+
 WORKDIR ${CARTESI_ROLLUPS_DIR}
 
-CMD ["bash","build-cannon.sh"]
+ENV STATE_FILE=${STATE_FILE}
+
+CMD devnet.sh -s ${STATE_FILE}
