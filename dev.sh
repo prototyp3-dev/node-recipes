@@ -70,7 +70,7 @@ check_setup_deps() {
 check_node_setup() {
     if [[ ! -f "node-compose.yml" || ! -f "node.mk" ]]; then
         error "Node environment not set up. Please run setup first:"
-        echo "  curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh | bash -s setup"
+        echo "  curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup"
         exit 1
     fi
 }
@@ -99,7 +99,8 @@ download_files() {
     
     # Extract files
     unzip -q "$zip_file" -d "$temp_dir"
-    local repo_dir="$temp_dir/node-recipes-$BRANCH"
+    local branch_folder=$(echo "$BRANCH" | tr '/' '-')
+    local repo_dir="$temp_dir/node-recipes-$branch_folder"
     
     # Copy node files (don't overwrite this script)
     cp "$repo_dir/node/node-compose.yml" ./
@@ -117,74 +118,43 @@ setup() {
     
     log "Setting up Cartesi node development environment..."
     
-    # If we're being piped from curl, save ourselves first
-    if [[ ! -f "./dev.sh" ]]; then
-        log "Saving dev.sh script locally..."
-        # Create temporary copy of the script
-        local temp_script=$(mktemp)
-        cat "$0" > "$temp_script"
-        cp "$temp_script" "./dev.sh"
-        chmod +x "./dev.sh"
-        rm "$temp_script"
-    fi
-    
     # Download required files
     download_files
     
     # Setup environment
     setup_node
     
+    # Create environment file
+    create_default_env "localhost"
+    
     # Show completion message
     echo
-    log "🎉 Cartesi node development environment setup complete!"
-    echo
-    info "The dev.sh script is now available in your current directory."
+    log "🎉 Cartesi with Espresso sequencer setup complete!"
     echo
     info "Next steps:"
     echo
-    echo "  1. Create your application snapshot:"
-    echo "     ./dev.sh create-snapshot"
-    echo
-    echo "  2. Start development environment (with Espresso sequencer):"
+    echo "  1. Start development environment (with Espresso sequencer):"
     echo "     ./dev.sh start"
     echo
-    echo "  3. Deploy your application:"
+    echo "  2. Deploy your application:"
     echo "     ./dev.sh deploy"
     echo
-    echo "  4. Access GraphQL at http://localhost:8080/graphql"
-    echo
-    echo "Alternative: Use Ethereum sequencer instead:"
-    echo "     ./dev.sh start ethereum"
+    echo "  3. Stop the development environment:"
+    echo "     ./dev.sh stop"
     echo
     echo "For help: ./dev.sh help"
     echo "For status: ./dev.sh status"
     echo
 }
 
-
-
 # Setup node environment
 setup_node() {
     log "Setting up Cartesi node environment..."
-    
-    # Copy required files from node-recipes
-    if [[ -f "$SCRIPT_DIR/node/node-compose.yml" ]]; then
-        cp "$SCRIPT_DIR/node/node-compose.yml" ./
-        cp "$SCRIPT_DIR/node/node.mk" ./
-    else
-        error "Node files not found. Please ensure you're in the node-recipes directory"
-        exit 1
-    fi
-    
-    # Create default localhost environment with Espresso
-    create_default_env "localhost"
     
     # Pull required images
     docker pull ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
     docker pull ghcr.io/prototyp3-dev/test-devnet:2.0.0
 }
-
-
 
 # Create default environment file
 create_default_env() {
@@ -253,8 +223,6 @@ start() {
     start_node "$sequencer" "$port"
 }
 
-
-
 # Start node environment
 start_node() {
     local sequencer=${1:-"espresso"}
@@ -318,7 +286,7 @@ deploy() {
     log "Deploying application: $app_name"
     
     if [[ ! -d "$image_path" ]]; then
-        error "Snapshot not found at $image_path. Create snapshot first."
+        error "Snapshot not found at $image_path. Please create your application snapshot first."
         exit 1
     fi
     
@@ -635,8 +603,8 @@ COMMANDS:
     help                   Show this help
 
 EXAMPLES:
-    # First time setup (one command does everything)
-    curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh | bash -s setup
+    # First time setup
+    curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup
     
     # Daily usage
     ./dev.sh start                     # Start with Espresso sequencer (default)
