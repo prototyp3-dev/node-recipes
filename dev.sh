@@ -39,6 +39,15 @@ check_deps() {
     fi
 }
 
+# Check send dependencies
+check_send_deps() {
+    command -v curl >/dev/null && command -v jq >/dev/null && command -v cast >/dev/null || { 
+        error "Missing dependencies for send: install curl, jq, and cast (foundry)"
+        echo "Install with: brew install curl jq && curl -L https://foundry.paradigm.xyz | bash && foundryup"
+        exit 1
+    }
+}
+
 # Check setup dependencies (for initial setup)
 check_setup_deps() {
     local missing=()
@@ -469,27 +478,6 @@ wait_for_services() {
     log "🎉 All services are ready! You can now deploy your application."
 }
 
-# Create snapshot
-create_snapshot() {
-    log "Creating Cartesi snapshot..."
-    
-    if command -v cartesi &> /dev/null; then
-        log "Using Cartesi CLI to build snapshot..."
-        cartesi build
-    else
-        warn "Cartesi CLI not found. Installing locally..."
-        if command -v npm &> /dev/null; then
-            npm install @cartesi/cli@2.0.0-alpha.2
-            npx cartesi build
-        else
-            error "npm not found. Please install Node.js and npm, or install Cartesi CLI manually"
-            exit 1
-        fi
-    fi
-    
-    log "Snapshot created at $IMAGE_PATH"
-}
-
 # Show status
 status() {
     log "Cartesi Node Environment Status"
@@ -570,6 +558,167 @@ config() {
     esac
 }
 
+# Espresso transaction functions
+get_nonce() {
+    local response=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"app_contract\":\"$1\",\"msg_sender\":\"$2\"}" "$3/nonce")
+    echo "$response" | jq -r '.nonce' || { error "Failed to get nonce"; return 1; }
+}
+
+create_typed_data() {
+    cat << EOF
+{
+  "domain": {
+    "name": "Cartesi",
+    "version": "0.1.0",
+    "chainId": $3,
+    "verifyingContract": "0x0000000000000000000000000000000000000000"
+  },
+  "types": {
+    "EIP712Domain": [
+      {"name": "name", "type": "string"},
+      {"name": "version", "type": "string"},
+      {"name": "chainId", "type": "uint256"},
+      {"name": "verifyingContract", "type": "address"}
+    ],
+    "CartesiMessage": [
+      {"name": "app", "type": "address"},
+      {"name": "nonce", "type": "uint64"},
+      {"name": "max_gas_price", "type": "uint128"},
+      {"name": "data", "type": "bytes"}
+    ]
+  },
+  "primaryType": "CartesiMessage",
+  "message": {
+    "app": "$1",
+    "nonce": $2,
+    "max_gas_price": "0",
+    "data": "$4"
+  }
+}
+EOF
+}
+
+sign_typed_data() {
+    local temp_file=$(mktemp)
+    echo "$1" > "$temp_file"
+    local signature=$(cast wallet sign --private-key "$2" --data --from-file "$temp_file" 2>/dev/null)
+    rm -f "$temp_file"
+    echo "$signature" || { error "Failed to sign"; return 1; }
+}
+
+get_account_from_key() {
+    cast wallet address --private-key "$1" || { error "Invalid private key"; return 1; }
+}
+
+submit_transaction() {
+    local payload=$(jq -n --argjson typedData "$1" --arg signature "$2" --arg account "$3" '{typedData: $typedData, signature: $signature, account: $account}')
+    local response=$(curl -s -X POST -H "Content-Type: application/json" -d "$payload" "$4/submit")
+    echo "$response" | jq -r '.id' || { error "Failed to submit"; return 1; }
+}
+
+# Default values for send command
+SEND_CHAIN_ID="31337"
+SEND_NODE_URL="http://localhost:8080"
+
+# Send transaction to Espresso
+send() {
+    check_send_deps
+    
+    local app_address=""
+    local data=""
+    local private_key=""
+    local chain_id="$SEND_CHAIN_ID"
+    local node_url="$SEND_NODE_URL"
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -a|--app)
+                app_address="$2"
+                shift 2
+                ;;
+            -d|--data)
+                data="$2"
+                shift 2
+                ;;
+            -k|--private-key)
+                private_key="$2"
+                shift 2
+                ;;
+            -c|--chain-id)
+                chain_id="$2"
+                shift 2
+                ;;
+            -n|--node-url)
+                node_url="$2"
+                shift 2
+                ;;
+            -h|--help)
+                cat << 'EOF'
+Usage: ./dev.sh send -a APP_ADDRESS -d DATA -k PRIVATE_KEY [OPTIONS]
+
+Send L2 transactions to Cartesi+Espresso
+
+REQUIRED:
+    -a, --app ADDRESS      App contract address
+    -d, --data DATA        Transaction data in hex
+    -k, --private-key KEY  Private key for signing
+
+OPTIONAL:
+    -c, --chain-id ID      Chain ID (default: 31337)
+    -n, --node-url URL     Node URL (default: http://localhost:8080)
+    -h, --help            Show this help
+
+EXAMPLES:
+    # Basic usage (uses defaults)
+    ./dev.sh send -a 0x1234... -d 0x48656c6c6f -k your_private_key
+    
+    # With custom chain/node
+    ./dev.sh send -a 0x1234... -d 0x48656c6c6f -k your_key -c 11155111 -n http://remote:8080
+EOF
+                return 0
+                ;;
+            *)
+                error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    
+    # Validate required arguments
+    if [[ -z "$app_address" ]] || [[ -z "$data" ]] || [[ -z "$private_key" ]]; then
+        error "Missing required arguments"
+        echo "Use: ./dev.sh send --help for usage"
+        return 1
+    fi
+    
+    # Add 0x prefix if missing
+    [[ ! "$app_address" =~ ^0x ]] && app_address="0x$app_address"
+    [[ ! "$data" =~ ^0x ]] && data="0x$data"
+    [[ "$private_key" =~ ^0x ]] && private_key="${private_key#0x}"
+    
+    log "Sending transaction to Espresso..."
+    
+    # Get account address from private key
+    local account=$(get_account_from_key "$private_key")
+    log "Account: $account"
+    
+    # Get nonce
+    local nonce=$(get_nonce "$app_address" "$account" "$node_url")
+    log "Nonce: $nonce"
+    
+    # Create TypedData
+    local typed_data=$(create_typed_data "$app_address" "$nonce" "$chain_id" "$data")
+    
+    # Sign the TypedData
+    local signature=$(sign_typed_data "$typed_data" "$private_key")
+    log "Transaction signed"
+    
+    # Submit transaction
+    local tx_id=$(submit_transaction "$typed_data" "$signature" "$account" "$node_url")
+    log "🎉 Transaction submitted! Input ID: $tx_id"
+}
+
 # Show help
 help() {
     cat << 'EOF'
@@ -592,7 +741,12 @@ COMMANDS:
         --app-name NAME    Application name
         --image-path PATH  Snapshot location
     
-    create-snapshot        Build Cartesi snapshot
+    send                   Send transaction to Espresso
+        -a, --app ADDRESS  App contract address (required)
+        -d, --data DATA    Transaction data in hex (required)
+        -k, --private-key  Private key for signing (required)
+        Optional: -c chain-id (31337), -n node-url (localhost:8080)
+    
     
     wait [--basic]         Wait for services to be ready
                            --basic: Only wait for basic connectivity
@@ -610,6 +764,7 @@ EXAMPLES:
     ./dev.sh start                     # Start with Espresso sequencer (default)
     ./dev.sh start ethereum            # Start with Ethereum sequencer
     ./dev.sh deploy                    # Deploy current application
+    ./dev.sh send -a 0x1234... -d 0x48656c6c6f -k your_key  # Send transaction
     ./dev.sh logs node                 # Show node logs
     ./dev.sh stop                      # Stop everything
 
@@ -633,8 +788,9 @@ main() {
             shift
             deploy "$@"
             ;;
-        create-snapshot)
-            create_snapshot
+        send)
+            shift
+            send "$@"
             ;;
         wait)
             shift
