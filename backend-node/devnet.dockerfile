@@ -6,10 +6,12 @@ ARG FOUNDRY_VERSION=1.2.1
 ARG CARTESI_ROLLUPS_DIR=/opt/cartesi/rollups-contracts
 # ARG CARTESI_ROLLUPS_BRANCH=v2.0.0-rc.18
 ARG CARTESI_ROLLUPS_VERSION=2.0.0
+ARG CARTESI_PRT_VERSION=1.0.0
+ARG MACHINE_STEP_VERSION=0.13.0
 ARG CANNON_DIRECTORY=/cannon
 ARG STATE_FILE=/usr/share/devnet/anvil_state.json
 ARG ESPRESSO_DEPLOYMENT_FILE=/usr/share/devnet/espresso-deployment.json
-ARG ESPRESSO_DEV_NODE_TAG=20250528
+ARG ESPRESSO_DEV_NODE_TAG=20250528-patch1
 
 FROM ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:${ESPRESSO_DEV_NODE_TAG} AS espresso-dev-node
 
@@ -76,47 +78,31 @@ RUN ${FOUNDRY_DIR}/bin/foundryup -i ${FOUNDRY_VERSION}
 ARG CARTESI_ROLLUPS_DIR
 # ARG CARTESI_ROLLUPS_BRANCH
 ARG CARTESI_ROLLUPS_VERSION
+ARG CARTESI_PRT_VERSION
+ARG MACHINE_STEP_VERSION
 
-RUN mkdir -p ${CARTESI_ROLLUPS_DIR}
+RUN mkdir -p ${CARTESI_ROLLUPS_DIR}/dave
+
+RUN curl -s -L https://github.com/cartesi/dave/archive/refs/tags/v${CARTESI_PRT_VERSION}.tar.gz | \
+    tar -C ${CARTESI_ROLLUPS_DIR}/dave -zxf - --strip-components 1 dave-${CARTESI_PRT_VERSION}
+
+RUN curl -s -L https://github.com/cartesi/machine-solidity-step/archive/refs/tags/v${MACHINE_STEP_VERSION}.tar.gz | \
+    tar -C ${CARTESI_ROLLUPS_DIR}/dave/machine/step -zxf - --strip-components 1 machine-solidity-step-${MACHINE_STEP_VERSION}
+
 
 # RUN git clone --single-branch --branch ${CARTESI_ROLLUPS_BRANCH} \
 #     https://github.com/cartesi/rollups-contracts.git ${CARTESI_ROLLUPS_DIR}
 
-RUN curl -s -L https://github.com/cartesi/rollups-contracts/archive/refs/tags/v${CARTESI_ROLLUPS_VERSION}.tar.gz | \
-    tar -C ${CARTESI_ROLLUPS_DIR} -zxf - rollups-contracts-${CARTESI_ROLLUPS_VERSION}/ --strip-components 1
-
-# RUN sed -i -e 's/"dependencies": {/"dependencies": {\n        "@cartesi\/util": "6.3.0",/' ${CARTESI_ROLLUPS_DIR}/package.json
+# RUN curl -s -L https://github.com/cartesi/rollups-contracts/archive/refs/tags/v${CARTESI_ROLLUPS_VERSION}.tar.gz | \
+#     tar -C ${CARTESI_ROLLUPS_DIR} -zxf - rollups-contracts-${CARTESI_ROLLUPS_VERSION}/ --strip-components 1
 
 # install npm dependencies    
-RUN cd ${CARTESI_ROLLUPS_DIR} && pnpm i
+# RUN cd ${CARTESI_ROLLUPS_DIR} && pnpm install
+RUN cd ${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts && pnpm install
 
 # install forge dependencies
-RUN cd ${CARTESI_ROLLUPS_DIR} && ${FOUNDRY_DIR}/bin/forge soldeer install
-
-# # make build generate the same artifact as hardhat
-# RUN <<EOF
-# set -e
-# sed -i -e 's/libs = .*/libs = ["@cartesi", "@openzeppelin", "forge-std"]/' ${CARTESI_ROLLUPS_DIR}/foundry.toml
-# sed -i -e 's/\[profile.default\]/[profile.default]\nevm_version = "paris"\noptimizer = true\nuse_literal_content = true\nauto_detect_remappings = false/' ${CARTESI_ROLLUPS_DIR}/foundry.toml
-# EOF
-
-# RUN rm ${CARTESI_ROLLUPS_DIR}/remappings.txt
-
-# RUN <<EOF
-# set -e
-# ln -s ${CARTESI_ROLLUPS_DIR}/node_modules/@cartesi ${CARTESI_ROLLUPS_DIR}/@cartesi
-# ln -s ${CARTESI_ROLLUPS_DIR}/node_modules/@openzeppelin ${CARTESI_ROLLUPS_DIR}/@openzeppelin
-# ln -s ${CARTESI_ROLLUPS_DIR}/lib/forge-std/src ${CARTESI_ROLLUPS_DIR}/forge-std
-# EOF
-
-# # cannon configuration
-# RUN <<EOF
-# set -e
-# curl -s -L https://github.com/cartesi/rollups-contracts/raw/refs/heads/main/cannonfile.toml \
-#     -o ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
-# sed -i -e "s/version = \".*\"/version = \"${CARTESI_ROLLUPS_VERSION}\"/" ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
-# sed -i -e 's/true/"0xE1CB04A0fA36DdD16a06ea828007E35e1a3cBC37"/g' ${CARTESI_ROLLUPS_DIR}/cannonfile.toml
-# EOF
+# RUN cd ${CARTESI_ROLLUPS_DIR} && ${FOUNDRY_DIR}/bin/forge soldeer install
+RUN cd ${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts && ${FOUNDRY_DIR}/bin/forge soldeer install
 
 ARG CANNON_DIRECTORY
 ENV CANNON_DIRECTORY=${CANNON_DIRECTORY}
@@ -124,11 +110,38 @@ RUN mkdir -p ${CANNON_DIRECTORY}
 ENV PATH="$PATH:/$FOUNDRY_DIR/bin"
 
 WORKDIR ${CARTESI_ROLLUPS_DIR}
+
+COPY <<EOF ${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts/cannonfile-deploy.toml
+name = 'devnet'
+version = '0.0.1'
+
+[clone.cartesiRollups]
+source = "cartesi-rollups:${CARTESI_ROLLUPS_VERSION}@main"
+chainId = 1
+
+[clone.prtContracts]
+source = "cartesi-prt-multilevel:${CARTESI_PRT_VERSION}@main"
+#target = "cartesi-prt-multilevel:0.0.1@test"
+chainId = 1
+
+[deploy.DaveConsensusFactory]
+artifact = "DaveConsensusFactory"
+args = [
+  "<%= cartesiRollups.InputBox.address %>",
+  "<%= prtContracts.MultiLevelTournamentFactory.address %>",
+]
+create2 = true
+salt = "<%= zeroHash %>"
+ifExists = "continue"
+depends = ['clone.prtContracts','clone.cartesiRollups']
+
+EOF
+
 COPY --chmod=755 <<EOF ${CARTESI_ROLLUPS_DIR}/devnet.sh
 #!/bin/bash
 set -e
 anvil_params="--host 0.0.0.0 --block-time 2 --slots-in-an-epoch 1"
-cannon_params="--skip-compile --wipe"
+cannon_params="${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts/cannonfile-deploy.toml --skip-compile --wipe"
 kill_anvil=
 keep_alive=true
 state_file=
@@ -192,7 +205,9 @@ ARG STATE_FILE
 COPY --from=espresso-dev-node ${STATE_FILE} ${STATE_FILE}.bkp
 
 # RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x -a "" -c "--dry-run -w  deployments/localhost --impersonate 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x -a "--load-state ${STATE_FILE}.bkp --dump-state ${STATE_FILE}" -c "-w  deployments/localhost"
+RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x \
+    -a "--load-state ${STATE_FILE}.bkp --dump-state ${STATE_FILE}  --preserve-historical-states" \
+    -c "${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts/cannonfile-deploy.toml -w deployments/localhost"
 
 FROM base
 

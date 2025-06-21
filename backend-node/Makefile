@@ -37,7 +37,7 @@ devnet-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag
-	docker build -f devnet.dockerfile . \
+	docker build -f devnet.dockerfile ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-devnet" \
 		--label "org.opencontainers.image.description=Test Devnet" \

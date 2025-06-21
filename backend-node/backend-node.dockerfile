@@ -8,19 +8,22 @@ ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
 ARG HLGRAPHQL_VERSION=2.3.13
 ARG TRAEFIK_VERSION=3.2.0
-ARG GOVERSION=1.24.3
+ARG GOVERSION=1.24.4
 ARG GO_BUILD_PATH=/build/cartesi/go
-ARG ROLLUPSNODE_VERSION=2.0.0-dev-20250527
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.6
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
+ARG ROLLUPSNODE_ACCEPT_DAVE_PATCH=https://gist.githubusercontent.com/lynoferraz/122bf63fdc23737a6bf00a1667799f1d/raw/e9a1b2ccbdcb9a1b11f22d193f76e26ad74d7224/node_accept_dave_consensus-v2.0.0-alpha.6.patch
 ARG ESPRESSOREADER_VERSION=0.4.0-alpha.1
-ARG ESPRESSOREADER_BRANCH=feature/adapt-node-alpha5
+# ARG ESPRESSOREADER_BRANCH=feature/adapt-node-alpha6
+ARG ESPRESSOREADER_BRANCH=v0.4.0-alpha.1
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 # ARG ESPRESSO_DEV_NODE_TAG=20250428-dev-node-decaf-pos
-ARG ESPRESSO_DEV_NODE_TAG=20250528
+ARG ESPRESSO_DEV_NODE_TAG=20250528-patch1
 ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
 ARG GRAPHQL_VERSION=2.3.14
+ARG PRT_NODE_VERSION=1.0.0
 ARG FOUNDRY_DIR=/foundry
 ARG FOUNDRY_VERSION=1.2.1
 
@@ -100,33 +103,39 @@ ENV GOCACHE=${GO_BUILD_PATH}/.cache
 ENV GOENV=${GO_BUILD_PATH}/.config/go/env
 ENV GOPATH=${GO_BUILD_PATH}/.go
 
-# ARG ROLLUPSNODE_VERSION
-ARG ROLLUPSNODE_BRANCH
+ARG ROLLUPSNODE_VERSION
+# ARG ROLLUPSNODE_BRANCH
 ARG ROLLUPSNODE_DIR
 
-# RUN mkdir ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
-# RUN wget -qO- https://github.com/cartesi/rollups-node/archive/refs/tags/v${ROLLUPSNODE_VERSION}.tar.gz | \
-#     tar -C ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} -zxf - --strip-components 1 rollups-node-${ROLLUPSNODE_VERSION}
+RUN mkdir ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
+RUN wget -qO- https://github.com/cartesi/rollups-node/archive/refs/tags/v${ROLLUPSNODE_VERSION}.tar.gz | \
+    tar -C ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} -zxf - --strip-components 1 rollups-node-${ROLLUPSNODE_VERSION}
 
-RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
-    https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
+# Pacth to accept dave consensus events
+ARG ROLLUPSNODE_ACCEPT_DAVE_PATCH
+ADD --chown=cartesi:cartesi ${ROLLUPSNODE_ACCEPT_DAVE_PATCH} ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}/accept_dave_events.patch
+RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && \
+    patch -p1 < accept_dave_events.patch
+
+# RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
+#     https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && make build-go
 
 ARG ESPRESSOREADER_VERSION
 ARG ESPRESSOREADER_DIR
-# ARG ESPRESSOREADER_BRANCH
+ARG ESPRESSOREADER_BRANCH
 
-RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
-    tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
+# RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+# RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
+#     tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
 
 # RUN wget -q https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader \
 #     -O ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-espresso-reader
 
-# RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
-#     https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
+    https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
 
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
@@ -170,6 +179,7 @@ ENV BASE_PATH=${BASE_PATH}
 ENV SNAPSHOTS_APPS_PATH=${BASE_PATH}/apps
 ENV NODE_PATH=${BASE_PATH}/node
 ENV ESPRESSO_PATH=${BASE_PATH}/espresso
+ENV DAVE_PATH=${BASE_PATH}/dave
 
 RUN useradd --user-group cartesi
 
@@ -182,7 +192,7 @@ RUN <<EOF
         ca-certificates curl procps \
         xz-utils nginx postgresql-client \
         lua5.4 libslirp0 libglib2.0-0 libc6 \
-        postgresql-client
+        postgresql-client jq xxd
     rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
     mkdir -p ${NODE_PATH}/snapshots ${NODE_PATH}/data ${ESPRESSO_PATH}
     chown -R cartesi:cartesi ${NODE_PATH}
@@ -210,7 +220,7 @@ dpkg -i /tmp/cartesi-machine.deb
 rm /tmp/cartesi-machine.deb
 EOF
 
-# # install cartesi-rollups
+# install cartesi-rollups
 # ARG ROLLUPSNODE_VERSION
 # RUN <<EOF
 # set -e
@@ -223,6 +233,11 @@ EOF
 ARG GRAPHQL_VERSION
 RUN curl -s -L https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
     tar xzf - -C /usr/local/bin cartesi-rollups-graphql
+
+# install cartesi-rollups-prt-node
+ARG PRT_NODE_VERSION
+RUN curl -s -L https://github.com/cartesi/dave/releases/download/v${PRT_NODE_VERSION}/cartesi-rollups-prt-node-Linux-gnu-$(uname -i).tar.gz | \
+    tar xzf - -C /usr/local/bin cartesi-rollups-prt-node
 
 # # Copy Go binary.
 ARG GO_BUILD_PATH
@@ -397,6 +412,8 @@ mkdir -p "${SNAPSHOTS_APPS_PATH}"
 mkdir -p "${NODE_PATH}"/snapshots
 mkdir -p "${NODE_PATH}"/data
 mkdir -p "${ESPRESSO_PATH}"
+mkdir -p "${DAVE_PATH}"/snapshots
+mkdir -p "${DAVE_PATH}"/states
 EOF
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/up
@@ -713,6 +730,7 @@ if [[ \${ACTIVATE_CARTESI_NODE} = true ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-evmreader-envs
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-dave-envs
     if [[ \${MAIN_SEQUENCER} = espresso ]]; then
         # if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} = "http://devnet:8545" ]]; then
         #     touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/espresso-node
@@ -790,26 +808,83 @@ multisubstitute {
 export CARTESI_GRAPHQL_DATABASE_CONNECTION \${CARTESI_GRAPHQL_DATABASE_CONNECTION}
 export POSTGRES_NODE_DB_URL \${POSTGRES_NODE_DB_URL}
 export HTTP_PORT \${GRAPHQL_PORT}
-cartesi-rollups-graphql \
-    \${GRAPHQL_EXTRA_FLAGS}
+cartesi-rollups-graphql \${GRAPHQL_EXTRA_FLAGS}
+EOF
+
+################################################################################
+# Configure s6 dave node template
+ENV DAVE_ENVFILE=${DAVE_PATH}/dave-envs
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/define-dave-envs/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/define-dave-envs/dependencies.d/prepare-dirs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-dave-envs/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-dave-envs/run.sh
+#!/command/with-contenv sh
+echo "DAVE_RUST_LOG=\${CARTESI_LOG_LEVEL}" >> \${DAVE_ENVFILE}
+if [ \${CARTESI_LOG_LEVEL} = "debug" ]; then
+    backtrace"full"
+fi
+echo "DAVE_RUST_BACKTRACE=\$backtrace" >> \${DAVE_ENVFILE}
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/define-dave-envs/up
+/etc/s6-overlay/s6-rc.d/define-dave-envs/run.sh
+EOF
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/templates/dave-node/dependencies.d
+touch /etc/s6-overlay/templates/dave-node/dependencies.d/define-dave-envs
+echo "longrun" > /etc/s6-overlay/templates/dave-node/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/templates/dave-node/run
+#!/command/execlineb -s1
+with-contenv
+pipeline -w { sed --unbuffered "s/^/dave-\${1}: /" }
+fdmove -c 2 1
+importas -S DAVE_ENVFILE
+envfile \${DAVE_ENVFILE}
+
+multisubstitute {
+    importas -S DAVE_PATH
+    importas -S DAVE_RUST_LOG
+    importas -S DAVE_RUST_BACKTRACE
+    importas -S CARTESI_AUTH_PRIVATE_KEY
+    importas -S CARTESI_BLOCKCHAIN_HTTP_ENDPOINT
+    importas -S CARTESI_BLOCKCHAIN_ID
+}
+foreground {
+    echo "cartesi-rollups-prt-node --web3-rpc-url=\${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} --web3-chain-id=\${CARTESI_BLOCKCHAIN_ID} --app-address=\${1} --machine-path=\${DAVE_PATH}/snapshots/\${1} --state-dir=\${DAVE_PATH}/states/\${1} pk --web3-private-key=\${CARTESI_AUTH_PRIVATE_KEY}"
+}
+export RUST_LOG \${DAVE_RUST_LOG}
+export RUST_BACKTRACE \${DAVE_RUST_BACKTRACE}
+
+cartesi-rollups-prt-node 
+    --web3-rpc-url=\${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT}
+    --web3-chain-id=\${CARTESI_BLOCKCHAIN_ID}
+    --app-address=\${1}
+    --machine-path=\${DAVE_PATH}/snapshots/\${1}
+    --state-dir=\${DAVE_PATH}/states/\${1}
+    pk
+    --web3-private-key=\${CARTESI_AUTH_PRIVATE_KEY}
 EOF
 
 ################################################################################
 # deploy and register scripts
-RUN <<EOF
-chown -R cartesi:cartesi /mnt
-EOF
 
 COPY --chmod=755 <<EOF /deploy.sh
 #!/bin/bash
 if [ ! -z \${OWNER} ]; then
-    owner_args="-o \${OWNER} -O \${OWNER}"
+    owner_args="--owner \${OWNER} --authority-owner \${OWNER}"
 fi
 if [ ! -z \${CONSENSUS_ADDRESS} ]; then
-    consensus_arg="-c \${CONSENSUS_ADDRESS}"
+    consensus_arg="--consensus \${CONSENSUS_ADDRESS}"
 fi
 if [ ! -z \${EPOCH_LENGTH} ]; then
-    epoch_arg="-e \${EPOCH_LENGTH}"
+    epoch_arg="--epoch-length \${EPOCH_LENGTH}"
 fi
 if [ ! -z \${SALT} ]; then
     salt_arg="--salt \${SALT}"
@@ -821,9 +896,10 @@ if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
     auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
 fi
 if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    da_arg="-D \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$(curl -s -f \${ESPRESSO_BASE_URL}/v0/status/block-height) \$ESPRESSO_NAMESPACE)"
+    da_arg="--data-availability \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$(curl -s -f \${ESPRESSO_BASE_URL}/v0/status/block-height) \$ESPRESSO_NAMESPACE)"
 fi
-cartesi-rollups-cli app deploy -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} -t \$1 || echo 'Not deployed'
+echo cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} 
+cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} || echo 'Not deployed'
 EOF
 
 COPY --chmod=755 <<EOF /register.sh
@@ -831,11 +907,99 @@ COPY --chmod=755 <<EOF /register.sh
 cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
 EOF
 
+COPY --chmod=755 <<EOF /deploy-dave.sh
+#!/bin/bash
+OWNER=\${OWNER:-0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266}
+EPOCH_LENGTH=\${EPOCH_LENGTH:-303}
+SALT=\${SALT:-0x0000000000000000000000000000000000000000000000000000000000000000}
+
+da_arg="0x"
+if [[ \${MAIN_SEQUENCER} = ethereum ]]; then
+    da_arg="\$(cast calldata 'InputBox(address)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS)"
+fi
+if [[ \${MAIN_SEQUENCER} = espresso ]]; then
+    echo "Espresso with dave consensus is not supported yet"
+    exit 1
+    # da_arg="\$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$(curl -s -f \${ESPRESSO_BASE_URL}/v0/status/block-height) \$ESPRESSO_NAMESPACE)"
+fi
+machine_hash=\$(xxd -p -c 32 \$1/hash)
+
+res=\$(cast send --json --rpc-url \$CARTESI_BLOCKCHAIN_HTTP_ENDPOINT --private-key \$CARTESI_AUTH_PRIVATE_KEY \$CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS "newApplication(address,address,bytes32,bytes,bytes32)" 0x0000000000000000000000000000000000000000 \$OWNER \$machine_hash \$da_arg \$SALT)
+
+if [ -z "\${res}" ]; then
+    echo "Application deployment failed"
+    exit 1
+fi
+
+application_address=\$(echo "\${res}" | jq -r '.logs[0].address')
+
+echo "application: \$application_address"
+
+res=\$(cast send --json --rpc-url \$CARTESI_BLOCKCHAIN_HTTP_ENDPOINT --private-key \$CARTESI_AUTH_PRIVATE_KEY \$CARTESI_CONTRACTS_DAVE_CONSENSUS_FACTORY_ADDRESS "newDaveConsensus(address,bytes32,bytes32)" \$application_address \$machine_hash \$SALT)
+
+if [ -z "\${res}" ]; then
+    echo "Dave Consensus deployment failed"
+    exit 1
+fi
+
+dave_consensus_address=\$(echo "\${res}" | jq -r '.logs[0].address')
+
+echo "dave consensus: \$dave_consensus_address"
+
+res=\$(cast send --json --rpc-url \$CARTESI_BLOCKCHAIN_HTTP_ENDPOINT --private-key \$CARTESI_AUTH_PRIVATE_KEY \$application_address "migrateToOutputsMerkleRootValidator(address)" \$dave_consensus_address)
+
+if [ -z "\${res}" ]; then
+    echo "Migrate to dave Consensus failed"
+    exit 1
+fi
+
+APP_NAME=\${APP_NAME} EPOCH_LENGTH=\${EPOCH_LENGTH} EXTRA_ARGS=\${EXTRA_ARGS} APPLICATION_ADDRESS=\$application_address CONSENSUS_ADDRESS=\$dave_consensus_address /register-dave.sh \$1 
+EOF
+
+COPY --chmod=755 <<EOF /initialize-dave-node.sh
+#!/bin/bash
+
+ln -sr \$1 \${DAVE_PATH}/snapshots/\${APPLICATION_ADDRESS}
+mkdir -p \${DAVE_PATH}/states/\${APPLICATION_ADDRESS}
+
+if [ ! -d /run/s6-rc/servicedirs/dave-nodes ]; then
+    echo "Dave nodes instance not found, making it.."
+    /command/s6-instance-maker /etc/s6-overlay/templates/dave-node /run/s6-rc/servicedirs/dave-nodes
+fi
+
+if [ ! -f /run/services/dave-nodes ]; then
+    echo "Linking dave nodes service..."
+    ln -s /run/s6-rc/servicedirs/dave-nodes /run/service/dave-nodes
+else
+    echo "Dave nodes service linked"
+fi
+
+if [[ \$(/command/s6-svstat -o up /run/service/dave-nodes 2>/dev/null) != true ]]; then
+    echo "Dave nodes service not supervised. Initializing it..."
+    /command/s6-svscanctl -a /run/service
+    timeout 22 bash -c 'until /command/s6-svstat -o up /run/service/dave-nodes >> /dev/null ; do sleep 1 && echo "  waiting dave node supervisor.."; done'
+else
+    echo "Dave nodes service supervised"
+fi
+
+/command/s6-instance-create /run/service/dave-nodes \${APPLICATION_ADDRESS}
+EOF
+
+COPY --chmod=755 <<EOF /register-dave.sh
+#!/bin/bash
+EPOCH_LENGTH=\${EPOCH_LENGTH:-303}
+
+APPLICATION_ADDRESS=\$APPLICATION_ADDRESS /initialize-dave-node.sh \$1 
+deployment_block_number=\$(cast call --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \${APPLICATION_ADDRESS} "getDeploymentBlockNumber()(uint256)")
+cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -t \$1 -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} --epoch-length \$EPOCH_LENGTH --inputbox-block-number \${deployment_block_number} \${EXTRA_ARGS} || echo 'Not registered'
+EOF
+
 WORKDIR /opt/cartesi
 
 RUN <<EOF
+chown -R cartesi:cartesi /mnt
 chown -R cartesi:cartesi /opt/cartesi
-chown -R cartesi:cartesi /etc/s6-overlay/s6-rc.d
+chown -R cartesi:cartesi /etc/s6-overlay
 EOF
 
 # =============================================================================
