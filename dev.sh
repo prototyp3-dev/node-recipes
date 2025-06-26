@@ -2,6 +2,7 @@
 
 # Cartesi Node Recipes - Unified Developer Script
 # Simplifies all node operations into easy commands
+# stashed changes
 
 set -e
 
@@ -148,7 +149,10 @@ setup() {
     echo "  2. Deploy your application:"
     echo "     ./dev.sh deploy"
     echo
-    echo "  3. Stop the development environment:"
+    echo "  3. Send transactions to Espresso:"
+    echo "     ./dev.sh send -a APP_ADDRESS -d DATA -k PRIVATE_KEY"
+    echo
+    echo "  4. Stop the development environment:"
     echo "     ./dev.sh stop"
     echo
     echo "For help: ./dev.sh help"
@@ -156,7 +160,7 @@ setup() {
     echo
 }
 
-# Setup node environment
+# Setup node environment using makefile
 setup_node() {
     log "Setting up Cartesi node environment..."
     
@@ -165,37 +169,35 @@ setup_node() {
     docker pull ghcr.io/prototyp3-dev/test-devnet:2.0.0
 }
 
-# Create default environment file
+# Create environment file using makefile and add espresso config
 create_default_env() {
     local env_suffix=${1:-"localhost"}
-    local env_file="${ENVFILE}.${env_suffix}"
+    local env_file=".env.$env_suffix"
     
-    if [[ ! -f "$env_file" ]]; then
-        log "Creating default environment file: $env_file"
+    log "Creating environment file with Espresso defaults..."
+    # Let makefile handle base environment file creation
+    make -f node.mk "$env_file"
+    
+    # Override the default sequencer to espresso and add espresso-specific config
+    if [[ -f "$env_file" ]]; then
+        log "Configuring for Espresso sequencer by default..."
         
-        cat > "$env_file" << 'EOF'
-# Cartesi Node Configuration for Local Development
-CARTESI_LOG_LEVEL=info
-CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=http://devnet:8545
-CARTESI_BLOCKCHAIN_WS_ENDPOINT=ws://devnet:8545
-CARTESI_BLOCKCHAIN_ID=31337
-CARTESI_AUTH_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-
-# Cartesi Contract Addresses (for localhost devnet)
-CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc7007368E1b9929488744fa4dea7BcAEea000051
-CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
-CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7000e3A627f91AFDE0ba7F79dbcB41bF1EA0051
-CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xC700bc767f8A21Dad91cB13CF1F629C257850051
-
-# Sequencer Configuration (Default: Espresso)
-MAIN_SEQUENCER=espresso
-ESPRESSO_BASE_URL=http://espresso:10040
-ESPRESSO_NAMESPACE=55555
-
-# Features
-CARTESI_FEATURE_GRAPHQL_ENABLED=true
-CARTESI_FEATURE_RPC_ENABLED=true
-EOF
+        # Update MAIN_SEQUENCER from ethereum to espresso
+        if grep -q "MAIN_SEQUENCER=" "$env_file"; then
+            sed -i.bak 's/MAIN_SEQUENCER="ethereum"/MAIN_SEQUENCER="espresso"/' "$env_file"
+        else
+            echo "MAIN_SEQUENCER=\"espresso\"" >> "$env_file"
+        fi
+        
+        # Add espresso-specific configuration if not already present
+        if ! grep -q "ESPRESSO_BASE_URL" "$env_file" 2>/dev/null; then
+            echo "" >> "$env_file"
+            echo "# Espresso Configuration" >> "$env_file"
+            echo "ESPRESSO_BASE_URL=http://espresso:10040" >> "$env_file"
+            echo "ESPRESSO_NAMESPACE=55555" >> "$env_file"
+        fi
+        
+        log "Environment configured for Espresso sequencer by default"
     fi
 }
 
@@ -232,37 +234,46 @@ start() {
     start_node "$sequencer" "$port"
 }
 
-# Start node environment
+# Start node environment using makefile with environment overrides
 start_node() {
     local sequencer=${1:-"espresso"}
     local port=${2:-8080}
     
-    # Update environment file for sequencer choice
-    if [[ "$sequencer" == "ethereum" ]]; then
-        log "Configuring for Ethereum sequencer..."
-        # Update .env.localhost to use ethereum sequencer
-        if grep -q "MAIN_SEQUENCER=espresso" .env.localhost 2>/dev/null; then
-            sed -i.bak 's/MAIN_SEQUENCER=espresso/MAIN_SEQUENCER=ethereum/' .env.localhost
-        fi
-    else
-        log "Configuring for Espresso sequencer..."
-        # Update .env.localhost to use espresso sequencer
-        if grep -q "MAIN_SEQUENCER=ethereum" .env.localhost 2>/dev/null; then
-            sed -i.bak 's/MAIN_SEQUENCER=ethereum/MAIN_SEQUENCER=espresso/' .env.localhost
+    # Use makefile targets with environment variable overrides
+    export ENVFILENAME=".env.localhost"
+    
+    log "Configuring for $sequencer sequencer..."
+    
+    # Update sequencer in env file only if different
+    if [[ -f ".env.localhost" ]]; then
+        local current_sequencer=$(grep "MAIN_SEQUENCER=" .env.localhost 2>/dev/null | cut -d'=' -f2 | tr -d '"')
+        
+        if [[ "$current_sequencer" != "$sequencer" ]]; then
+            if grep -q "MAIN_SEQUENCER=" .env.localhost; then
+                sed -i.bak "s/MAIN_SEQUENCER=.*/MAIN_SEQUENCER=\"$sequencer\"/" .env.localhost
+                log "Updated MAIN_SEQUENCER from $current_sequencer to $sequencer in .env.localhost"
+            else
+                echo "MAIN_SEQUENCER=\"$sequencer\"" >> .env.localhost
+                log "Added MAIN_SEQUENCER=$sequencer to .env.localhost"
+            fi
+        else
+            log "MAIN_SEQUENCER already set to $sequencer"
         fi
     fi
     
-    # Start database and devnet
-    ENVFILENAME=".env.localhost" make -f node.mk run-database-localhost
-    ENVFILENAME=".env.localhost" make -f node.mk run-devnet-localhost
+    # Start services using makefile targets
+    log "Starting database and devnet..."
+    make -f node.mk run-database-localhost
+    make -f node.mk run-devnet-localhost
     
     if [[ "$sequencer" == "espresso" ]]; then
         log "Starting Espresso sequencer..."
-        ENVFILENAME=".env.localhost" make -f node.mk run-espresso-localhost
+        make -f node.mk run-espresso-localhost
     fi
     
-    # Start node
-    ENVFILENAME=".env.localhost" make -f node.mk run-node-localhost
+    log "Starting Cartesi node..."
+    # Now the env file has the correct sequencer
+    make -f node.mk run-node-localhost
     
     log "Node environment started with $sequencer sequencer!"
     log "GraphQL available at http://localhost:$port/graphql"
@@ -488,7 +499,7 @@ status() {
     
     # Show sequencer configuration
     if [[ -f ".env.localhost" ]]; then
-        local sequencer=$(grep "MAIN_SEQUENCER=" .env.localhost 2>/dev/null | cut -d'=' -f2)
+        local sequencer=$(grep "MAIN_SEQUENCER=" .env.localhost 2>/dev/null | cut -d'=' -f2 | tr -d '"')
         info "Sequencer: ${sequencer:-unknown}"
     fi
     echo
@@ -700,22 +711,42 @@ EOF
     log "Sending transaction to Espresso..."
     
     # Get account address from private key
-    local account=$(get_account_from_key "$private_key")
+    local account
+    if ! account=$(get_account_from_key "$private_key"); then
+        error "Failed to get account from private key"
+        return 1
+    fi
     log "Account: $account"
     
     # Get nonce
-    local nonce=$(get_nonce "$app_address" "$account" "$node_url")
+    local nonce
+    if ! nonce=$(get_nonce "$app_address" "$account" "$node_url"); then
+        error "Failed to get transaction nonce"
+        return 1
+    fi
     log "Nonce: $nonce"
     
     # Create TypedData
-    local typed_data=$(create_typed_data "$app_address" "$nonce" "$chain_id" "$data")
+    local typed_data
+    if ! typed_data=$(create_typed_data "$app_address" "$nonce" "$chain_id" "$data"); then
+        error "Failed to create typed data"
+        return 1
+    fi
     
     # Sign the TypedData
-    local signature=$(sign_typed_data "$typed_data" "$private_key")
+    local signature
+    if ! signature=$(sign_typed_data "$typed_data" "$private_key"); then
+        error "Failed to sign transaction"
+        return 1
+    fi
     log "Transaction signed"
     
     # Submit transaction
-    local tx_id=$(submit_transaction "$typed_data" "$signature" "$account" "$node_url")
+    local tx_id
+    if ! tx_id=$(submit_transaction "$typed_data" "$signature" "$account" "$node_url"); then
+        error "Failed to submit transaction"
+        return 1
+    fi
     log "🎉 Transaction submitted! Input ID: $tx_id"
 }
 
