@@ -1,6 +1,8 @@
 # (c) Cartesi and individual authors (see AUTHORS)
 # SPDX-License-Identifier: Apache-2.0 (see LICENSE)
 
+# syntax=docker.io/docker/dockerfile:1
+
 ARG FOUNDRY_DIR=/foundry
 ARG FOUNDRY_VERSION=1.2.1
 ARG CARTESI_ROLLUPS_DIR=/opt/cartesi/rollups-contracts
@@ -10,8 +12,8 @@ ARG CARTESI_PRT_VERSION=1.0.0
 ARG MACHINE_STEP_VERSION=0.13.0
 ARG CANNON_DIRECTORY=/cannon
 ARG STATE_FILE=/usr/share/devnet/anvil_state.json
-ARG ESPRESSO_DEPLOYMENT_FILE=/usr/share/devnet/espresso-deployment.json
-ARG ESPRESSO_DEV_NODE_TAG=20250528-patch1
+ARG ESPRESSO_DEPLOYMENT_FILE=/usr/share/devnet/espresso-deployment.txt
+ARG ESPRESSO_DEV_NODE_TAG=20250623
 
 FROM ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:${ESPRESSO_DEV_NODE_TAG} AS espresso-dev-node
 
@@ -36,16 +38,15 @@ RUN mkdir -p $(dirname ${STATE_FILE}) && \
 COPY --chmod=755 <<EOF /dump-devnet-state.sh
 #!/bin/bash
 set -e
-${FOUNDRY_DIR}/bin/anvil --dump-state ${STATE_FILE} > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+${FOUNDRY_DIR}/bin/anvil --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
 timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
-RUST_LOG=0 espresso-dev-node --l1-deployment dump > ${ESPRESSO_DEPLOYMENT_FILE}
+RUST_LOG=info espresso-dev-node --rpc-url http://127.0.0.1:8545 --l1-deployment dump --sequencer-api-port 8770 2>&1 | grep deployed | awk '{printf "%s: %s\\n",\$6,\$8 }' > ${ESPRESSO_DEPLOYMENT_FILE}
 kill \$anvil_pid
 wait \$anvil_pid
 EOF
 
 RUN bash /dump-devnet-state.sh
 
-# syntax=docker.io/docker/dockerfile:1
 FROM node:22-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -56,7 +57,7 @@ RUN <<EOF
     set -e
     apt-get update
     apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip
+        ca-certificates curl
     rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
 EOF
 
@@ -206,7 +207,7 @@ COPY --from=espresso-dev-node ${STATE_FILE} ${STATE_FILE}.bkp
 
 # RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x -a "" -c "--dry-run -w  deployments/localhost --impersonate 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x \
-    -a "--load-state ${STATE_FILE}.bkp --dump-state ${STATE_FILE}  --preserve-historical-states" \
+    -a "--load-state ${STATE_FILE}.bkp --dump-state ${STATE_FILE} --preserve-historical-states" \
     -c "${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts/cannonfile-deploy.toml -w deployments/localhost"
 
 FROM base

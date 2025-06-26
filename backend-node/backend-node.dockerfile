@@ -13,13 +13,12 @@ ARG GO_BUILD_PATH=/build/cartesi/go
 ARG ROLLUPSNODE_VERSION=2.0.0-alpha.6
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG ROLLUPSNODE_ACCEPT_DAVE_PATCH=https://gist.githubusercontent.com/lynoferraz/122bf63fdc23737a6bf00a1667799f1d/raw/e9a1b2ccbdcb9a1b11f22d193f76e26ad74d7224/node_accept_dave_consensus-v2.0.0-alpha.6.patch
+ARG ROLLUPSNODE_ACCEPT_DAVE_PATCH=https://gist.githubusercontent.com/lynoferraz/122bf63fdc23737a6bf00a1667799f1d/raw/6632b721934eec8902f9bcd53e9686f4c96b836b/node_accept_dave_consensus-v2.0.0-alpha.6.patch
 ARG ESPRESSOREADER_VERSION=0.4.0-alpha.1
-# ARG ESPRESSOREADER_BRANCH=feature/adapt-node-alpha6
-ARG ESPRESSOREADER_BRANCH=v0.4.0-alpha.1
+ARG ESPRESSOREADER_BRANCH=feature/adapt-node-alpha6
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 # ARG ESPRESSO_DEV_NODE_TAG=20250428-dev-node-decaf-pos
-ARG ESPRESSO_DEV_NODE_TAG=20250528-patch1
+ARG ESPRESSO_DEV_NODE_TAG=20250623
 ARG GRAPHQL_BRANCH=bugfix/output-constraint-error
 ARG GRAPHQL_DIR=rollups-graphql
 ARG GRAPHQL_VERSION=2.3.14
@@ -387,7 +386,7 @@ ARG ESPRESSO_SERVICE_ENDPOINT=localhost:${ESPRESSO_SERVICE_PORT}
 ENV ESPRESSO_SERVICE_ENDPOINT=${ESPRESSO_SERVICE_ENDPOINT}
 ARG GRAPHQL_PORT=10020
 ENV GRAPHQL_PORT=${GRAPHQL_PORT}
-ENV CARTESI_SNAPSHOT_DIR=${NODE_PATH}/snapshots
+ENV CARTESI_SNAPSHOTS_DIR=${NODE_PATH}/snapshots
 
 ENV NODE_DB=rollupsdb
 ENV GRAPHQL_DB=hlgraphql
@@ -898,7 +897,6 @@ fi
 if [[ \${MAIN_SEQUENCER} = espresso ]]; then
     da_arg="--data-availability \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$(curl -s -f \${ESPRESSO_BASE_URL}/v0/status/block-height) \$ESPRESSO_NAMESPACE)"
 fi
-echo cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} 
 cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} || echo 'Not deployed'
 EOF
 
@@ -989,7 +987,9 @@ COPY --chmod=755 <<EOF /register-dave.sh
 #!/bin/bash
 EPOCH_LENGTH=\${EPOCH_LENGTH:-303}
 
-APPLICATION_ADDRESS=\$APPLICATION_ADDRESS /initialize-dave-node.sh \$1 
+if [[ \${CARTESI_FEATURE_DAVE_CONSENSUS_ENABLED} != false ]]; then
+    APPLICATION_ADDRESS=\$APPLICATION_ADDRESS /initialize-dave-node.sh \$1 
+fi
 deployment_block_number=\$(cast call --rpc-url \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \${APPLICATION_ADDRESS} "getDeploymentBlockNumber()(uint256)")
 cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -t \$1 -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} --epoch-length \$EPOCH_LENGTH --inputbox-block-number \${deployment_block_number} \${EXTRA_ARGS} || echo 'Not registered'
 EOF

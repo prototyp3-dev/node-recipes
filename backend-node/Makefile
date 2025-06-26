@@ -46,7 +46,7 @@ devnet-image:
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
-	docker run -it --rm $$IMAGE_TAG cat /usr/share/devnet/espresso-deployment.json | tail -n +1 | jq -r 'keys[] as $$k | "\(.[$$k] | .name): \($$k)"' | grep -v "null" > .devnet_espresso_deployment.txt
+	docker run -it --rm $$IMAGE_TAG cat /usr/share/devnet/espresso-deployment.txt > .devnet_espresso_deployment.txt
 	echo "Espresso deployment:"
 	cat .devnet_espresso_deployment.txt
 
