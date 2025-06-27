@@ -8,7 +8,7 @@ RELEASE_VERSION ?= $$(git log -1 --format="%at" | xargs -I{} date -d @{} +%Y%m%d
 # RELEASE_VERSION=2.0.0-alpha ARGS="--platform=linux/arm64,linux/amd64 --push"
 
 # needs rollups node path
-node-image: setup-multi-platform-builder
+node-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node.tag
@@ -22,7 +22,7 @@ node-image: setup-multi-platform-builder
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
-node-cloud-image: setup-multi-platform-builder
+node-cloud-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node-cloud:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node-cloud.tag
@@ -37,7 +37,7 @@ node-cloud-image: setup-multi-platform-builder
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
 # RELEASE_VERSION=2.0.0 ARGS="--platform=linux/arm64,linux/amd64 --push"
-devnet-image: setup-multi-platform-builder
+devnet-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag

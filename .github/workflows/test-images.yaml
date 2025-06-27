@@ -3,11 +3,6 @@ run-name: Building Test Images
 on:
   workflow_dispatch:
 
-env:
-  NODE_IMAGE_NAME: test-node
-  CLOUD_NODE_IMAGE_NAME: test-node-cloud
-  DEVNET_NAME: test-devnet
-
 jobs:
   build-test-images:
     runs-on: ubuntu-latest
@@ -20,21 +15,18 @@ jobs:
       fail-fast: false
       matrix:
         images:
-          - dockerfile: backend-node.dockerfile
+          - image: test-node
+            dockerfile: backend-node.dockerfile
             target: rollups-node-we
-          - dockerfile: backend-node.dockerfile
+          - image: test-node-cloud
+            dockerfile: backend-node.dockerfile
             target: rollups-node-we-cloud
-          - dockerfile: devnet.dockerfile
+          - image: devnet
+            dockerfile: devnet.dockerfile
             target: rollups-devnet-we
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -43,12 +35,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Node Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
             images: |
-                ghcr.io/prototyp3-dev/test-node
+                ghcr.io/prototyp3-dev/$${{ matrix.images.image }}
             tags: |
               type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
               type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
