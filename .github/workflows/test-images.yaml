@@ -14,6 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
         images:
           - image: test-node
             dockerfile: backend-node.dockerfile
@@ -26,6 +29,11 @@ jobs:
             target: rollups-devnet-we
 
     steps:
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
       - uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
@@ -41,30 +49,77 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Node Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-            images: |
-                ghcr.io/prototyp3-dev/${{ matrix.images.image }}
-            tags: |
-              type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
-              type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
-              type=sha
-            labels: |
-              org.opencontainers.image.title=prototyp3-dev-test-node-cloud
-              org.opencontainers.image.description=Test Node Cloud" 
-              org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes
-              org.opencontainers.image.licenses=Apache-2.0
-              org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes
-
       - name: Node Build and push
         uses: docker/build-push-action@v6
         with:
-          platforms: linux/amd64,linux/arm64
-          push: true
+          platforms: ${{ matrix.platform }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
           file: backend-node/${{ matrix.images.dockerfile }}
           context: backend-node
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Node Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          platforms: ${{ matrix.platform }}
+          images: |
+              ghcr.io/prototyp3-dev/${{ matrix.images.image }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
+            type=sha
+          labels: |
+            org.opencontainers.image.title=prototyp3-dev-test-node-cloud
+            org.opencontainers.image.description=${{ matrix.images.image }}
+            org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/prototyp3-dev/${{ matrix.images.image }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ghcr.io/prototyp3-dev/${{ matrix.images.image }}:${{ steps.meta.outputs.version }}
