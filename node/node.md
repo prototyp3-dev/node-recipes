@@ -9,21 +9,21 @@ Check [Setup](#setup) for some initial instructions, [Localhost](#localhost) to 
 Go to the application directory (which contains your snapshot image) and copy the dockerfile, the docker compose file, and the node.mk.
 
 ```shell
-wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/main.zip -O recipes.zip
-unzip -q recipes.zip "node-recipes-main/node/*" -d . && mv node-recipes-main/node/* . && rmdir -p node-recipes-main/node
+wget -q https://github.com/prototyp3-dev/node-recipes/archive/refs/heads/feature/v2-alpha.zip -O recipes.zip
+unzip -q recipes.zip "node-recipes-feature-v2-alpha/node/*" -d . && mv node-recipes-feature-v2-alpha/node/* . && rmdir -p node-recipes-feature-v2-alpha/node
 rm recipes.zip
 ```
 
 Also, make sure you have the updated test node images:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-node:latest
+docker pull ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
 ```
 
 And if you will run a local devnet:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-devnet:latest
+docker pull ghcr.io/prototyp3-dev/test-devnet:2.0.0
 ```
 
 ## Localhost
@@ -36,7 +36,7 @@ make -f node.mk run-database-localhost
 make -f node.mk run-node-localhost
 ```
 
-With the infrastructure running, you can deploy the application with
+With the infrastructure running, you can deploy the application with (note: it may take a few seconds to deploy all cartesi rollups contracts)
 
 ```shell
 make -f node.mk deploy-localhost 
@@ -50,6 +50,53 @@ To stop the environment just run:
 make -f node.mk stop-localhost
 ```
 
+**Espresso**
+
+To test with a local espresso development node, add the `MAIN_SEQUENCER` env and other espresso configurations to .env.localhost file:
+
+```shell
+MAIN_SEQUENCER=espresso
+ESPRESSO_BASE_URL=http://espresso:10040
+ESPRESSO_NAMESPACE=55555
+```
+
+Then you can start the database, devnet, and espresso:
+
+```shell
+make -f node.mk run-devnet-localhost
+make -f node.mk run-database-localhost
+make -f node.mk run-espresso-localhost
+```
+
+Finally, start the node and deploy the application
+
+```shell
+make -f node.mk run-node-localhost
+make -f node.mk deploy-localhost 
+```
+
+**Dave**
+
+To test with dave prt node, disable the node claim submission on the .env.localhost file:
+
+```shell
+CARTESI_FEATURE_CLAIM_SUBMISSION_ENABLED=false
+```
+
+Then you can start the database, and devnet:
+
+```shell
+make -f node.mk run-devnet-localhost
+make -f node.mk run-database-localhost
+```
+
+Finally, start the node and deploy the application
+
+```shell
+make -f node.mk run-node-localhost
+make -f node.mk deploy-dave-localhost 
+```
+
 ## Testnet
 
 Create a .env.<testnet> file with:
@@ -57,12 +104,15 @@ Create a .env.<testnet> file with:
 ```shell
 CARTESI_LOG_LEVEL=info
 CARTESI_AUTH_KIND=private_key
-CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
-CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc70074BDD26d8cF983Ca6A5b89b8db52D5850051
+CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
+CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7006f70875BaDe89032001262A846D3Ee160051
+CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xc700285Ab555eeB5201BC00CFD4b2CC8DED90051
 MAIN_SEQUENCER=espresso
-ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
-ESPRESSO_NAMESPACE=51025
-ESPRESSO_STARTING_BLOCK=
+CARTESI_FEATURE_GRAPHQL_ENABLED=true
+CARTESI_FEATURE_RPC_ENABLED=true
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network
+ESPRESSO_NAMESPACE=55555
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
 CARTESI_BLOCKCHAIN_WS_ENDPOINT=
 CARTESI_BLOCKCHAIN_ID=
@@ -82,7 +132,7 @@ And deploy the application with (optionally set `IMAGE_PATH`):
 make -f node.mk deploy-<testnet> OWNER=<app and auth owner>
 ```
 
-You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `CONSENSUS_ADDRESS` to deploy a new application with same consensus already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
 
 To stop the environment just run:
 
@@ -93,7 +143,7 @@ make -f node.mk stop-<testnet>
 Note: If want to register an already deployed application to the node use (optionally set `IMAGE_PATH`):
 
 ```shell
-make -f node.mk register-<testnet> APPLICATION_ADDRESS=<app address> AUTHORITY_ADDRESS=<auth address> 
+make -f node.mk register-<testnet> APPLICATION_ADDRESS=<app address> CONSENSUS_ADDRESS=<auth address> 
 ```
 
 ## Deploy backend to fly.io
@@ -103,20 +153,23 @@ Go to the directory containing your project. You should create a `.env.<testnet>
 ```shell
 CARTESI_LOG_LEVEL=info
 CARTESI_AUTH_KIND=private_key
-CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x593E5BCf894D6829Dd26D0810DA7F064406aebB6
-CARTESI_CONTRACTS_INPUT_BOX_DEPLOYMENT_BLOCK_NUMBER=6994348
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc70074BDD26d8cF983Ca6A5b89b8db52D5850051
+CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
+CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7006f70875BaDe89032001262A846D3Ee160051
+CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xc700285Ab555eeB5201BC00CFD4b2CC8DED90051
 MAIN_SEQUENCER=espresso
-ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network/v0
-ESPRESSO_NAMESPACE=51025
-ESPRESSO_STARTING_BLOCK=
+CARTESI_FEATURE_GRAPHQL_ENABLED=true
+CARTESI_FEATURE_RPC_ENABLED=true
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network
+ESPRESSO_NAMESPACE=55555
 CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
 CARTESI_BLOCKCHAIN_WS_ENDPOINT=
 CARTESI_BLOCKCHAIN_ID=
 CARTESI_AUTH_PRIVATE_KEY=
-CARTESI_POSTGRES_ENDPOINT=
+CARTESI_DATABASE_CONNECTION=
 ```
 
-Note that the value of `CARTESI_POSTGRES_ENDPOINT` will be provided on the Step 3.
+Note that the value of `CARTESI_DATABASE_CONNECTION` will be provided on the Step 3.
 
 Then follow these steps to deploy on fly
 
@@ -130,7 +183,7 @@ mkdir -p .fly/node
 
 ```toml
 [build]
-  image = "ghcr.io/prototyp3-dev/test-node-cloud:latest"
+  image = "ghcr.io/prototyp3-dev/test-node-cloud:2.0.0-alpha"
 
 [http_service]
   internal_port = 80
@@ -166,7 +219,7 @@ We suggest creating a persistent volume to store the snapshots, so you wouldn't 
 fly ext supabase create
 ```
 
-Make sure to add the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file.
+Make sure to add the value of `CARTESI_DATABASE_CONNECTION` variable to your environment file.
 
 You can also use the `fly postgres` to create the database:
 
@@ -174,7 +227,7 @@ You can also use the `fly postgres` to create the database:
 fly postgres create
 ```
 
-Similarly, make sure to set the value of `CARTESI_POSTGRES_ENDPOINT` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
+Similarly, make sure to set the value of `CARTESI_DATABASE_CONNECTION` variable to your environment file. You should use the provided `Connection string` to set these variables, and don't forget to add the database `postgres` and option `sslmode=disable` to the string (**`postgres?sslmode=disable`**):
 
 ```shell
 postgres://{username}:{password}@{hostname}:{port}/postgres?sslmode=disable
@@ -226,15 +279,15 @@ fly sftp shell -c .fly/node/fly.toml
 Finally, run the deployment on the node: 
 
 ```shell
-fly ssh console -c .fly/node/fly.toml -C "bash -c 'OWNER={OWNER} /deploy.sh /mnt/apps/$app_name'"
+fly ssh console -c .fly/node/fly.toml -C "bash -c 'APP_NAME=$app_name OWNER={OWNER} /deploy.sh /mnt/apps/$app_name'"
 ```
 
-You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `AUTHORITY_ADDRESS` to deploy a new application with same authority already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
+You should set `OWNER` to the same owner of the `CARTESI_AUTH_PRIVATE_KEY`. Set `CONSENSUS_ADDRESS` to deploy a new application with same consensus already deployed. You can also set `EPOCH_LENGTH`, and `SALT`.
 
 If you have already deployed the application, you can register it to add to the node (after transfering the image).
 
 ```shell
-fly ssh console -c .fly/node/fly.toml -C "bash -c 'APPLICATION_ADDRESS=${APPLICATION_ADDRESS} AUTHORITY_ADDRESS=${AUTHORITY_ADDRESS} /register.sh /mnt/apps/$app_name'"
+fly ssh console -c .fly/node/fly.toml -C "bash -c 'APPLICATION_ADDRESS=${APPLICATION_ADDRESS} CONSENSUS_ADDRESS=${CONSENSUS_ADDRESS} /register.sh /mnt/apps/$app_name'"
 ```
 
 Your application is now deployed on the node. Also note that you can deploy multiple applications on the same node.
@@ -297,7 +350,7 @@ After a successful execution, your snapshot will be located inside `./.cartesi/i
 The following commands assumes you have the `cartesi-machine` command on your system. Alternatively, you might want to use a docker container with all required packeges and run in interactive mode:
 
 ```shell
-docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:latest bash
+docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:2.0.0-alpha bash
 ```
 
 First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/root.ext2`). Copy the base image to a working dir so you can start making changes. 

@@ -5,12 +5,11 @@ RELEASE_VERSION ?= $$(git log -1 --format="%at" | xargs -I{} date -d @{} +%Y%m%d
 .ONESHELL:
 
 # needs rollups node path
-node-image: --check-envs
+node-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node.tag
-	docker build -t recipe-stage/builder --target go-builder ${NODE_REPO_PATH}
-	docker build -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
+	docker build --debug -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node" \
 		--label "org.opencontainers.image.description=Test Node" \
@@ -20,11 +19,10 @@ node-image: --check-envs
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
-node-cloud-image: --check-envs
+node-cloud-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node-cloud:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node-cloud.tag
-	docker build -t recipe-stage/builder --target go-builder ${NODE_REPO_PATH}
 	docker build -f backend-node.dockerfile --target rollups-node-we-cloud ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node-cloud" \
@@ -35,11 +33,11 @@ node-cloud-image: --check-envs
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
-devnet-image: --check-envs
+devnet-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag
-	docker build -f ${NODE_REPO_PATH}/test/devnet/Dockerfile --target rollups-node-devnet ${NODE_REPO_PATH} \
+	docker build -f devnet.dockerfile ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-devnet" \
 		--label "org.opencontainers.image.description=Test Devnet" \
@@ -48,9 +46,9 @@ devnet-image: --check-envs
 		--label "org.opencontainers.image.licenses=Apache-2.0" \
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
-
---check-envs:
-	@test ! -z '${NODE_REPO_PATH}' || (echo "Must define NODE_REPO_PATH" && exit 1)
+	docker run -it --rm $$IMAGE_TAG cat /usr/share/devnet/espresso-deployment.txt > .devnet_espresso_deployment.txt
+	echo "Espresso deployment:"
+	cat .devnet_espresso_deployment.txt
 
 nonode-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}

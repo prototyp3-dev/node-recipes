@@ -1,25 +1,17 @@
 # Test Node images
 
-Create versions of the node and graphql
+Create versions of the node
 
 ## Build Images
 
-You'll ne the node repo accesible to set `NODE_REPO_PATH` variable. Then, to build node v2 images run:
-
 ```shell
-make node-image NODE_REPO_PATH=/path/to/rollups-node
+make node-image
 ```
 
 and
 
 ```shell
-make hlgraphql-image
-```
-
-and
-
-```shell
-make devnet-image NODE_REPO_PATH=/path/to/rollups-node
+make devnet-image
 ```
 
 To build nonode image run:
