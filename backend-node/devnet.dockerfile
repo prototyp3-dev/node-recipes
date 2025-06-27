@@ -210,7 +210,7 @@ RUN bash ${CARTESI_ROLLUPS_DIR}/devnet.sh -x \
     -a "--load-state ${STATE_FILE}.bkp --dump-state ${STATE_FILE} --preserve-historical-states" \
     -c "${CARTESI_ROLLUPS_DIR}/dave/cartesi-rollups/contracts/cannonfile-deploy.toml -w deployments/localhost"
 
-FROM base
+FROM base AS rollups-devnet-we
 
 ARG CANNON_DIRECTORY
 ENV CANNON_DIRECTORY=${CANNON_DIRECTORY}
@@ -235,4 +235,4 @@ WORKDIR ${CARTESI_ROLLUPS_DIR}
 
 ENV STATE_FILE=${STATE_FILE}
 
-CMD devnet.sh -s ${STATE_FILE}
+CMD ["bash","-c","devnet.sh -s ${STATE_FILE}"]

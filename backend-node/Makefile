@@ -1,15 +1,18 @@
 
 RELEASE_SUFFIX ?= ''
 RELEASE_VERSION ?= $$(git log -1 --format="%at" | xargs -I{} date -d @{} +%Y%m%d.%H%M).$$(git rev-parse --short HEAD)
+# TARGETARCH ?= $$(dpkg --print-architecture)
 
 .ONESHELL:
 
+# RELEASE_VERSION=2.0.0-alpha ARGS="--platform=linux/arm64,linux/amd64 --push"
+
 # needs rollups node path
-node-image:
+node-image: setup-multi-platform-builder
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node.tag
-	docker build --debug -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
+	docker buildx build --debug -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node" \
 		--label "org.opencontainers.image.description=Test Node" \
@@ -19,11 +22,11 @@ node-image:
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
-node-cloud-image:
+node-cloud-image: setup-multi-platform-builder
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node-cloud:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node-cloud.tag
-	docker build -f backend-node.dockerfile --target rollups-node-we-cloud ${ARGS} . \
+	docker buildx build -f backend-node.dockerfile --target rollups-node-we-cloud ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node-cloud" \
 		--label "org.opencontainers.image.description=Test Node Cloud" \
@@ -33,11 +36,12 @@ node-cloud-image:
 		--label "org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes" \
 		--label "org.opencontainers.image.version=$$IMAGE_VERSION"
 
-devnet-image:
+# RELEASE_VERSION=2.0.0 ARGS="--platform=linux/arm64,linux/amd64 --push"
+devnet-image: setup-multi-platform-builder
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag
-	docker build -f devnet.dockerfile ${ARGS} . \
+	docker buildx build -f devnet.dockerfile ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-devnet" \
 		--label "org.opencontainers.image.description=Test Devnet" \
@@ -49,6 +53,11 @@ devnet-image:
 	docker run -it --rm $$IMAGE_TAG cat /usr/share/devnet/espresso-deployment.txt > .devnet_espresso_deployment.txt
 	echo "Espresso deployment:"
 	cat .devnet_espresso_deployment.txt
+
+setup-multi-platform-builder:
+	@echo "Setting up multi-platform builder..."
+	docker buildx create --name multiarch_builder --use --platform=linux/arm64,linux/amd64 || true
+	docker buildx inspect --bootstrap
 
 nonode-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}

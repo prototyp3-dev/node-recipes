@@ -26,9 +26,6 @@ ARG PRT_NODE_VERSION=1.0.0
 ARG FOUNDRY_DIR=/foundry
 ARG FOUNDRY_VERSION=1.2.1
 
-# TODO: change $(dpkg --print-architecture) to ${TARGETARCH}
-# ARG TARGETARCH=amd64
-
 # =============================================================================
 # STAGE: node builder
 #
@@ -81,9 +78,10 @@ FROM common-env AS go-installer
 USER root
 
 ARG GOVERSION
+ARG TARGETARCH
 
-RUN wget https://go.dev/dl/go${GOVERSION}.linux-$(dpkg --print-architecture).tar.gz && \
-    tar -C /usr/local -xzf go${GOVERSION}.linux-$(dpkg --print-architecture).tar.gz
+RUN wget https://go.dev/dl/go${GOVERSION}.linux-${TARGETARCH}.tar.gz && \
+    tar -C /usr/local -xzf go${GOVERSION}.linux-${TARGETARCH}.tar.gz
 
 ENV PATH=/usr/local/go/bin:${PATH}
 
@@ -147,7 +145,7 @@ RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
 # ARG GRAPHQL_DIR
 
 # RUN mkdir ${GO_BUILD_PATH}/${GRAPHQL_DIR}
-# RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+# RUN wget -qO- https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-${TARGETARCH}.tar.gz | \
 #     tar -C ${GO_BUILD_PATH}/${GRAPHQL_DIR} -zxf - cartesi-rollups-graphql
 
 # RUN git clone --single-branch --branch ${GRAPHQL_BRANCH} \
@@ -197,6 +195,8 @@ RUN <<EOF
     chown -R cartesi:cartesi ${NODE_PATH}
 EOF
 
+ARG TARGETARCH
+
 # install s6 overlay
 ARG S6_OVERLAY_VERSION
 RUN curl -s -L https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz | \
@@ -206,15 +206,15 @@ RUN curl -s -L https://github.com/just-containers/s6-overlay/releases/download/v
 
 # install telegraf
 ARG TELEGRAF_VERSION
-RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_$(dpkg --print-architecture).tar.gz | \
+RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_${TARGETARCH}.tar.gz | \
     tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
 
-# curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX}/cartesi-machine-v${EMULATOR_VERSION}_$(dpkg --print-architecture).deb
+# curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX}/cartesi-machine-v${EMULATOR_VERSION}_${TARGETARCH}.deb
 ARG EMULATOR_VERSION
 ARG EMULATOR_VERSION_SUFFIX
 RUN <<EOF
 set -e
-curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}/machine-emulator_$(dpkg --print-architecture).deb
+curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}/machine-emulator_${TARGETARCH}.deb
 dpkg -i /tmp/cartesi-machine.deb
 rm /tmp/cartesi-machine.deb
 EOF
@@ -223,19 +223,19 @@ EOF
 # ARG ROLLUPSNODE_VERSION
 # RUN <<EOF
 # set -e
-# curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_$(dpkg --print-architecture).deb
+# curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_${TARGETARCH}.deb
 # dpkg -i /tmp/cartesi-rollups-node.deb
 # rm /tmp/cartesi-rollups-node.deb
 # EOF
 
 # install cartesi-rollups-graphql
 ARG GRAPHQL_VERSION
-RUN curl -s -L https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+RUN curl -s -L https://github.com/cartesi/rollups-graphql/releases/download/v${GRAPHQL_VERSION}/cartesi-rollups-graphql-v${GRAPHQL_VERSION}-linux-${TARGETARCH}.tar.gz | \
     tar xzf - -C /usr/local/bin cartesi-rollups-graphql
 
 # install cartesi-rollups-prt-node
 ARG PRT_NODE_VERSION
-RUN curl -s -L https://github.com/cartesi/dave/releases/download/v${PRT_NODE_VERSION}/cartesi-rollups-prt-node-Linux-gnu-$(uname -i).tar.gz | \
+RUN curl -s -L https://github.com/cartesi/dave/releases/download/v${PRT_NODE_VERSION}/cartesi-rollups-prt-node-Linux-gnu-$(x=$TARGETARCH; [ $TARGETARCH = amd64 ] && x=x86_64; echo $x).tar.gz | \
     tar xzf - -C /usr/local/bin cartesi-rollups-prt-node
 
 # # Copy Go binary.
@@ -355,6 +355,92 @@ http {
     proxy_cache_path /var/cache keys_zone=mycache:200m;
 
     include /etc/nginx/sites-enabled/*;
+}
+EOF
+
+# Configure nginx server with cache
+COPY --chmod=755 <<EOF /etc/nginx/sites-available/cloud.conf
+server {
+    listen       80;
+    listen  [::]:80;
+
+    proxy_cache mycache;
+
+    location /graphql {
+        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
+    }
+
+    location /nonce {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
+    }
+
+    location /submit {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
+    }
+
+    location /inspect {
+        proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
+        proxy_cache_valid 200 5s;
+        proxy_cache_background_update on;
+        proxy_cache_use_stale error timeout updating http_500 http_502
+                              http_503 http_504;
+        proxy_cache_lock on;
+
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /rpc {
+        proxy_pass   http://localhost:${CARTESI_JSONRPC_API_ADDRESS}/rpc;
+        proxy_cache_valid 200 1s;
+        proxy_cache_background_update on;
+        proxy_cache_use_stale error timeout updating http_500 http_502
+                              http_503 http_504;
+        proxy_cache_lock on;
+
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+EOF
+
+# Configure nginx server without cache
+COPY --chmod=755 <<EOF /etc/nginx/sites-available/node.conf
+server {
+    listen       80;
+    listen  [::]:80;
+
+    location /graphql {
+        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
+    }
+
+    location /nonce {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
+    }
+
+    location /submit {
+        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
+    }
+
+    location /inspect {
+        proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
+    }
+
+    location /rpc {
+        proxy_pass   http://localhost:${CARTESI_JSONRPC_API_PORT}/rpc;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
 }
 EOF
 
@@ -720,7 +806,13 @@ RUN mkdir -p /etc/s6-overlay/scripts
 ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
-# decide which reader to start
+# decide nginx conf
+if [[ \${CLOUD} = true ]]; then
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-espresso-envs
+        ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
+else
+    ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
+fi
 if [[ \${ACTIVATE_CARTESI_NODE} = true ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/nginx
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate
@@ -730,6 +822,7 @@ if [[ \${ACTIVATE_CARTESI_NODE} = true ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-evmreader-envs
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-dave-envs
+    # decide reader to start espresso reader
     if [[ \${MAIN_SEQUENCER} = espresso ]]; then
         # if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} = "http://devnet:8545" ]]; then
         #     touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/espresso-node
@@ -754,7 +847,6 @@ if [[ \${ACTIVATE_ESPRESSO_DEV_NODE} = true ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-espresso-envs
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-node
 fi
-
 EOF
 
 ################################################################################
@@ -1000,81 +1092,28 @@ RUN <<EOF
 chown -R cartesi:cartesi /mnt
 chown -R cartesi:cartesi /opt/cartesi
 chown -R cartesi:cartesi /etc/s6-overlay
+chown -R cartesi:cartesi /run
 EOF
 
 # =============================================================================
-# STAGE: rollups-node-we
+# STAGE: rollups-node-we-cloud
 #
 # =============================================================================
 
 FROM base-rollups-node-we AS rollups-node-we-cloud
 
-RUN touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
-
-# Configure nginx server with cache
-COPY --chmod=755 <<EOF /etc/nginx/sites-available/cloud.conf
-server {
-    listen       80;
-    listen  [::]:80;
-
-    proxy_cache mycache;
-
-    location /graphql {
-        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
-    }
-
-    location /nonce {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
-    }
-
-    location /submit {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
-    }
-
-    location /inspect {
-        proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
-        proxy_cache_valid 200 5s;
-        proxy_cache_background_update on;
-        proxy_cache_use_stale error timeout updating http_500 http_502
-                              http_503 http_504;
-        proxy_cache_lock on;
-
-        proxy_read_timeout 300s;
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    location /rpc {
-        proxy_pass   http://localhost:${CARTESI_JSONRPC_API_ADDRESS}/rpc;
-        proxy_cache_valid 200 1s;
-        proxy_cache_background_update on;
-        proxy_cache_use_stale error timeout updating http_500 http_502
-                              http_503 http_504;
-        proxy_cache_lock on;
-
-        proxy_read_timeout 300s;
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    error_page   500 502 503 504  /50x.html;
-    location = /50x.html {
-        root   /usr/share/nginx/html;
-    }
-}
-EOF
-
-RUN ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
+# Set root user
+USER root
 
 # Create init wrapper
 COPY --chmod=755 <<EOF /init-wrapper
 #!/bin/sh
 # run /init with PID 1, creating a new PID namespace if necessary
 if [ "\$$" -eq 1 ]; then
-    # we already have PID 1
+    echo # we already have PID 1
     exec /init "\$@"
 else
-    # create a new PID namespace
+    echo # create a new PID namespace
     exec unshare --pid sh -c '
         # set up /proc and start the real init in the background
         unshare --mount-proc /init "\$@" &
@@ -1089,50 +1128,18 @@ else
 fi
 EOF
 
-# ENTRYPOINT ["/init-wrapper"]
+ENV CLOUD=true
 
+ENTRYPOINT ["/init-wrapper"]
+
+# =============================================================================
+# STAGE: rollups-node-we
+#
+# =============================================================================
 
 FROM base-rollups-node-we AS rollups-node-we
-
-RUN chown -R cartesi:cartesi /run
-
-# Configure nginx server with cache
-COPY --chmod=755 <<EOF /etc/nginx/sites-available/node.conf
-server {
-    listen       80;
-    listen  [::]:80;
-
-    location /graphql {
-        proxy_pass   http://localhost:${GRAPHQL_PORT}/graphql;
-    }
-
-    location /nonce {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
-    }
-
-    location /submit {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
-    }
-
-    location /inspect {
-        proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
-    }
-
-    location /rpc {
-        proxy_pass   http://localhost:${CARTESI_JSONRPC_API_PORT}/rpc;
-    }
-
-    error_page   500 502 503 504  /50x.html;
-    location = /50x.html {
-        root   /usr/share/nginx/html;
-    }
-}
-EOF
-
-RUN ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
 
 # Set user to low-privilege.
 USER cartesi
 
-# Set the Go supervisor as the command.
 # ENTRYPOINT [ "/init" ]
