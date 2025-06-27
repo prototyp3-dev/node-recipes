@@ -49,6 +49,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Node Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+              ghcr.io/prototyp3-dev/${{ matrix.images.image }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
+            type=sha
+          labels: |
+            org.opencontainers.image.title=prototyp3-dev-test-node-cloud
+            org.opencontainers.image.description=${{ matrix.images.image }}
+            org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes
+
       - name: Node Build and push
         uses: docker/build-push-action@v6
         with:
@@ -100,7 +117,6 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          platforms: ${{ matrix.platform }}
           images: |
               ghcr.io/prototyp3-dev/${{ matrix.images.image }}
           tags: |
