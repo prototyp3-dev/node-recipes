@@ -68,5 +68,5 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
-          file: {context}/${{ matrix.images.dockerfile }}
+          file: backend-node/${{ matrix.images.dockerfile }}
           context: backend-node
