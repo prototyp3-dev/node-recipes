@@ -69,4 +69,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
           file: ${{ matrix.images.dockerfile }}
-          context: backend-node
+          context: ./backend-node
