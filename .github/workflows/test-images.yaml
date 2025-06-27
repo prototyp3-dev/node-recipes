@@ -20,19 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         images:
-          - dockerfile: backend-node/backend-node.dockerfile
+          - dockerfile: backend-node.dockerfile
             target: rollups-node-we
-          - dockerfile: backend-node/backend-node.dockerfile
+          - dockerfile: backend-node.dockerfile
             target: rollups-node-we-cloud
-          - dockerfile: backend-node/devnet.dockerfile
+          - dockerfile: devnet.dockerfile
             target: rollups-devnet-we
 
     steps:
-      - name: Prepare
-        run: |
-          dockerfile=${{ matrix.images.dockerfile }}
-          target=${{ matrix.images.target }}
-
       - uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -56,7 +51,7 @@ jobs:
                 ghcr.io/prototyp3-dev/test-node
             tags: |
               type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
-              type=ref,event=workflow_dispatch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
+              type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
               type=sha
             labels: |
               org.opencontainers.image.title=prototyp3-dev-test-node-cloud
@@ -74,3 +69,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
           file: ${{ matrix.images.dockerfile }}
+          context: backend-node
