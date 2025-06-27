@@ -21,7 +21,7 @@ jobs:
           - image: test-node-cloud
             dockerfile: backend-node.dockerfile
             target: rollups-node-we-cloud
-          - image: devnet
+          - image: test-devnet
             dockerfile: devnet.dockerfile
             target: rollups-devnet-we
 
