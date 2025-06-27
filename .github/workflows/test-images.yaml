@@ -58,11 +58,11 @@ jobs:
           labels: |
             org.opencontainers.image.title=prototyp3-dev-test-node-cloud
             org.opencontainers.image.description=${{ matrix.images.image }}
-            org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes
+            org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.licenses=Apache-2.0
-            org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes
+            org.opencontainers.image.url=${{ github.repository }}
 
-      - name: Node Build and push
+      - name: Node Build and push by digest
         uses: docker/build-push-action@v6
         with:
           platforms: ${{ matrix.platform }}
@@ -71,7 +71,7 @@ jobs:
           target: ${{ matrix.images.target }}
           file: backend-node/${{ matrix.images.dockerfile }}
           context: backend-node
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
