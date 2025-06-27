@@ -11,7 +11,6 @@ env:
 jobs:
   build-test-images:
     runs-on: ubuntu-latest
-    environment: Rollups-v2
 
     permissions:
       packages: write
@@ -35,22 +34,6 @@ jobs:
           target=${{ matrix.images.target }}
 
       - uses: actions/checkout@v4
-
-      - name: Set up .env
-        env:
-          DOT_ENV_VARIABLES: >-
-            NEXT_PUBLIC_ASSETS_BLOCK
-            PRIVY_APP_SECRET
-          NEXT_PUBLIC_ASSETS_BLOCK: ${{ vars.NEXT_PUBLIC_ASSETS_BLOCK }}
-          PRIVY_APP_SECRET: ${{ secrets.PRIVY_APP_SECRET }}
-        run: |
-          rm .env
-          for var in $DOT_ENV_VARIABLES; do
-            echo $var=${!var} >> .env
-          done
-          echo Final .env:
-          cat .env
-
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
