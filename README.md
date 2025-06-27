@@ -14,17 +14,19 @@ Use Docker Compose and Makefiles directly for full control. This README covers t
 
 ## Quick Start
 
+The following commands are meant to be run in the root of the Cartesi application project.
+
 ### 1. Setup
 
 ```bash
 # Download and setup the development environment
-curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup
+curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/main/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup
 ```
 
 This will:
 - Download required Docker images
-- Create `.env.localhost` with Espresso sequencer as default
-- Configure all necessary Espresso settings
+- Create `.env.localhost`
+- Configure Espresso setup
 
 ### 2. Start Development Environment
 

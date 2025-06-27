@@ -2,7 +2,6 @@
 
 # Cartesi Node Recipes - Unified Developer Script
 # Simplifies all node operations into easy commands
-# stashed changes
 
 set -e
 
@@ -12,7 +11,7 @@ APP_NAME=${APP_NAME:-$(basename "$PWD")}
 IMAGE_PATH=${IMAGE_PATH:-".cartesi/image"}
 ENVFILE=".env"
 REPO_URL="https://github.com/prototyp3-dev/node-recipes"
-BRANCH="feature/v2-alpha"
+BRANCH="main"
 
 # Colors for output
 RED='\033[0;31m'
@@ -80,7 +79,7 @@ check_setup_deps() {
 check_node_setup() {
     if [[ ! -f "node-compose.yml" || ! -f "node.mk" ]]; then
         error "Node environment not set up. Please run setup first:"
-        echo "  curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup"
+        echo "  curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/main/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup"
         exit 1
     fi
 }
@@ -156,7 +155,6 @@ setup() {
     echo "     ./dev.sh stop"
     echo
     echo "For help: ./dev.sh help"
-    echo "For status: ./dev.sh status"
     echo
 }
 
@@ -272,7 +270,6 @@ start_node() {
     fi
     
     log "Starting Cartesi node..."
-    # Now the env file has the correct sequencer
     make -f node.mk run-node-localhost
     
     log "Node environment started with $sequencer sequencer!"
@@ -320,13 +317,6 @@ deploy_to_node() {
     
     log "Deploying to full node..."
     
-    # Check if services are running
-    # TODO: Fix service detection - temporarily commented out
-    # if ! ENVFILENAME=".env.localhost" docker compose -f node-compose.yml --env-file .env.localhost ps --services --filter "status=running" | grep -q "node"; then
-    #     error "Node service is not running. Please start the environment first with: ./dev.sh start"
-    #     exit 1
-    # fi
-    
     # Wait for devnet to be ready
     log "Waiting for devnet to be ready..."
     local retries=0
@@ -349,7 +339,7 @@ deploy_to_node() {
     fi
     
     log "Devnet is ready. Starting deployment..."
-    log "Note: This may take a few seconds to deploy all Cartesi rollups contracts..."
+    log "Note: This may take a few seconds to deploy the contracts..."
     
     # Run the actual deployment with error handling
     if ! ENVFILENAME=".env.localhost" APP_NAME="$app_name" IMAGE_PATH="$image_path" make -f node.mk deploy-localhost OWNER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; then
@@ -378,195 +368,6 @@ stop() {
     fi
     
     log "Environment stopped"
-}
-
-# Wait for services to be ready
-wait_for_services() {
-    local basic_only=false
-    
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --basic)
-                basic_only=true
-                shift
-                ;;
-            *)
-                shift
-                ;;
-        esac
-    done
-    
-    if [[ "$basic_only" == "true" ]]; then
-        log "Waiting for basic service connectivity..."
-    else
-        log "Waiting for services to be ready..."
-    fi
-    
-    # Check if compose file exists
-    if [[ ! -f "node-compose.yml" ]]; then
-        error "node-compose.yml not found. Run setup first: ./dev.sh setup node"
-        exit 1
-    fi
-    
-    # Wait for devnet
-    log "Checking devnet..."
-    local retries=0
-    local max_retries=30
-    while [[ $retries -lt $max_retries ]]; do
-        if curl -s -X POST -H "Content-Type: application/json" \
-           --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-           http://localhost:8545 > /dev/null 2>&1; then
-            log "✅ Devnet is ready"
-            break
-        fi
-        sleep 2
-        ((retries++))
-        echo -n "."
-    done
-    echo
-    
-    if [[ $retries -eq $max_retries ]]; then
-        error "Devnet not ready after $((max_retries * 2)) seconds"
-        exit 1
-    fi
-    
-    # Wait for node
-    log "Checking node..."
-    retries=0
-    while [[ $retries -lt $max_retries ]]; do
-        if [[ "$basic_only" == "true" ]]; then
-            # Basic check - just see if something is listening on port 8080
-            if curl -s http://localhost:8080/ > /dev/null 2>&1; then
-                log "✅ Node is responding"
-                break
-            fi
-        else
-            # Try multiple endpoints that might be available
-            if curl -s -f http://localhost:8080/healthz > /dev/null 2>&1 || \
-               curl -s -f http://localhost:8080/health > /dev/null 2>&1 || \
-               curl -s http://localhost:8080/ > /dev/null 2>&1; then
-                log "✅ Node is ready"
-                break
-            fi
-        fi
-        sleep 2
-        ((retries++))
-        echo -n "."
-    done
-    echo
-    
-    if [[ $retries -eq $max_retries ]]; then
-        error "Node not ready after $((max_retries * 2)) seconds"
-        echo
-        warn "Debug information:"
-        echo "Trying to connect to node endpoints..."
-        
-        # Debug: Show what's actually responding
-        if curl -s -I http://localhost:8080/ 2>/dev/null | head -1; then
-            echo "✅ http://localhost:8080/ is responding"
-        else
-            echo "❌ http://localhost:8080/ is not responding"
-        fi
-        
-        if curl -s -I http://localhost:8080/healthz 2>/dev/null | head -1; then
-            echo "✅ http://localhost:8080/healthz is responding"
-        else
-            echo "❌ http://localhost:8080/healthz is not responding"
-        fi
-        
-        if curl -s -I http://localhost:8080/health 2>/dev/null | head -1; then
-            echo "✅ http://localhost:8080/health is responding"
-        else
-            echo "❌ http://localhost:8080/health is not responding"
-        fi
-        
-        echo
-        echo "You can check the node logs with: ./dev.sh logs node"
-        exit 1
-    fi
-    
-    log "🎉 All services are ready! You can now deploy your application."
-}
-
-# Show status
-status() {
-    log "Cartesi Node Environment Status"
-    echo
-    
-    info "App Name: $APP_NAME"
-    info "Image Path: $IMAGE_PATH"
-    
-    # Show sequencer configuration
-    if [[ -f ".env.localhost" ]]; then
-        local sequencer=$(grep "MAIN_SEQUENCER=" .env.localhost 2>/dev/null | cut -d'=' -f2 | tr -d '"')
-        info "Sequencer: ${sequencer:-unknown}"
-    fi
-    echo
-    
-    info "Running Containers:"
-    docker ps --filter "name=cartesi-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || echo "None"
-    echo
-    
-    if [[ -f "node-compose.yml" ]]; then
-        info "Compose Services:"
-        ENVFILENAME=".env.localhost" docker compose -f node-compose.yml --env-file .env.localhost ps 2>/dev/null || echo "Not running"
-        echo
-        
-        # Check devnet connectivity
-        info "Network Status:"
-        if curl -s -X POST -H "Content-Type: application/json" \
-           --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-           http://localhost:8545 > /dev/null 2>&1; then
-            echo "  ✅ Devnet: Responding on http://localhost:8545"
-        else
-            echo "  ❌ Devnet: Not responding on http://localhost:8545"
-        fi
-        
-        # Check node health
-        if curl -s -f http://localhost:8080/healthz > /dev/null 2>&1; then
-            echo "  ✅ Node: Healthy on http://localhost:8080/healthz"
-        elif curl -s -f http://localhost:8080/health > /dev/null 2>&1; then
-            echo "  ✅ Node: Healthy on http://localhost:8080/health"
-        elif curl -s http://localhost:8080/ > /dev/null 2>&1; then
-            echo "  ⚠️  Node: Responding on http://localhost:8080/ (health endpoint not available)"
-        else
-            echo "  ❌ Node: Not responding on http://localhost:8080"
-        fi
-    fi
-}
-
-# Show logs
-logs() {
-    local service=${1:-""}
-    
-    if [[ -n "$service" ]]; then
-        ENVFILENAME=".env.localhost" docker compose -f node-compose.yml --env-file .env.localhost logs -f "$service" 2>/dev/null || docker logs -f "cartesi-$service" 2>/dev/null || error "Service not found: $service"
-    else
-        info "Available services:"
-        docker ps --filter "name=cartesi-" --format "{{.Names}}" | sed 's/cartesi-//' || echo "None"
-        echo
-        echo "Usage: $0 logs [service-name]"
-    fi
-}
-
-# Configuration management
-config() {
-    local action=${1:-"edit"}
-    
-    case $action in
-        "edit")
-            ${EDITOR:-nano} "${ENVFILE}.localhost"
-            ;;
-        "reset")
-            rm -f "${ENVFILE}.localhost"
-            create_default_env "localhost"
-            log "Configuration reset to defaults"
-            ;;
-        *)
-            echo "Usage: $0 config [edit|reset]"
-            ;;
-    esac
 }
 
 # Espresso transaction functions
@@ -778,25 +579,17 @@ COMMANDS:
         -k, --private-key  Private key for signing (required)
         Optional: -c chain-id (31337), -n node-url (localhost:8080)
     
-    
-    wait [--basic]         Wait for services to be ready
-                           --basic: Only wait for basic connectivity
-    status                 Show environment status
-    logs [service]         Show logs for service
-    config [edit|reset]    Manage configuration
-    
     help                   Show this help
 
 EXAMPLES:
     # First time setup
-    curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/feature/v2-alpha/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup
+    curl -fsSL https://raw.githubusercontent.com/prototyp3-dev/node-recipes/main/dev.sh -o dev.sh && chmod +x dev.sh && ./dev.sh setup
     
     # Daily usage
     ./dev.sh start                     # Start with Espresso sequencer (default)
     ./dev.sh start ethereum            # Start with Ethereum sequencer
     ./dev.sh deploy                    # Deploy current application
     ./dev.sh send -a 0x1234... -d 0x48656c6c6f -k your_key  # Send transaction
-    ./dev.sh logs node                 # Show node logs
     ./dev.sh stop                      # Stop everything
 
 EOF
@@ -822,21 +615,6 @@ main() {
         send)
             shift
             send "$@"
-            ;;
-        wait)
-            shift
-            wait_for_services "$@"
-            ;;
-        status)
-            status
-            ;;
-        logs)
-            shift
-            logs "$@"
-            ;;
-        config)
-            shift
-            config "$@"
             ;;
         help|--help|-h)
             help
