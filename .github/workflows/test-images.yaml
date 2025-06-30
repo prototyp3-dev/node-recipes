@@ -66,12 +66,12 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: ${{ matrix.platform }}
-          tags: ${{ matrix.images.image }}
+          tags: ${{ steps.meta.outputs.images }}
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
           file: backend-node/${{ matrix.images.dockerfile }}
           context: backend-node
-          outputs: type=image,name=ghcr.io/prototyp3-dev/${{ matrix.images.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=registry,push-by-digest=true,name-canonical=true
 
       - name: Export digest
         run: |
