@@ -109,7 +109,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/${{ matrix.images.image }}/digests
-          pattern: digests-${{ matrix.images.image }}-*
+          pattern: digests-${{ matrix.images.image }}-linux-*
           merge-multiple: true
 
       - name: Login to GitHub Container Registry
