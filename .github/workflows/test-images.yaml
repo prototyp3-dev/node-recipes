@@ -94,6 +94,10 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    permissions:
+      packages: write
+      contents: read
+
     strategy:
       fail-fast: false
       matrix:
@@ -129,7 +133,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
             type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
-            # type=sha
+            type=sha
           labels: |
             org.opencontainers.image.title=prototyp3-dev-${{ matrix.images.image }}
             org.opencontainers.image.description=${{ matrix.images.image }}
