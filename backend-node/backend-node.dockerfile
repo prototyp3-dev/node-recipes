@@ -211,7 +211,6 @@ RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_V
 
 # curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX}/cartesi-machine-v${EMULATOR_VERSION}_${TARGETARCH}.deb
 ARG EMULATOR_VERSION
-ARG EMULATOR_VERSION_SUFFIX
 RUN <<EOF
 set -e
 curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}/machine-emulator_${TARGETARCH}.deb
