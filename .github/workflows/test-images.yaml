@@ -18,12 +18,12 @@ jobs:
           - linux/amd64
           - linux/arm64
         images:
-          - image: test-node
-            dockerfile: backend-node.dockerfile
-            target: rollups-node-we
-          - image: test-node-cloud
-            dockerfile: backend-node.dockerfile
-            target: rollups-node-we-cloud
+          # - image: test-node
+          #   dockerfile: backend-node.dockerfile
+          #   target: rollups-node-we
+          # - image: test-node-cloud
+          #   dockerfile: backend-node.dockerfile
+          #   target: rollups-node-we-cloud
           - image: test-devnet
             dockerfile: devnet.dockerfile
             target: rollups-devnet-we
@@ -98,8 +98,8 @@ jobs:
       fail-fast: false
       matrix:
         images:
-          - image: test-node
-          - image: test-node-cloud
+          # - image: test-node
+          # - image: test-node-cloud
           - image: test-devnet
 
     steps:
@@ -107,7 +107,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/${{ matrix.images.image }}/digests
-          pattern: digests-*
           merge-multiple: true
 
       - name: Login to GitHub Container Registry
