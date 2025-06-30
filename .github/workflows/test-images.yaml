@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Prepare
         run: |
-          platform=${{ matrix.platform }}
+          platform=${{ matrix.images.image }}-${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
@@ -69,7 +69,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: ${{ matrix.platform }}
-          # tags: ${{ steps.meta.outputs.images }}
           tags: ghcr.io/prototyp3-dev/${{ matrix.images.image }}
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
