@@ -18,12 +18,12 @@ jobs:
           - linux/amd64
           - linux/arm64
         images:
-          # - image: test-node
-          #   dockerfile: backend-node.dockerfile
-          #   target: rollups-node-we
-          # - image: test-node-cloud
-          #   dockerfile: backend-node.dockerfile
-          #   target: rollups-node-we-cloud
+          - image: test-node
+            dockerfile: backend-node.dockerfile
+            target: rollups-node-we
+          - image: test-node-cloud
+            dockerfile: backend-node.dockerfile
+            target: rollups-node-we-cloud
           - image: test-devnet
             dockerfile: devnet.dockerfile
             target: rollups-devnet-we
@@ -32,7 +32,7 @@ jobs:
       - name: Prepare
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${{ matrix.images.image }}-${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
 
@@ -85,7 +85,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ env.PLATFORM_PAIR }}
+          name: digests-${{ matrix.images.image }}-${{ env.PLATFORM_PAIR }}
           path: ${{ runner.temp }}/${{ matrix.images.image }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -98,8 +98,8 @@ jobs:
       fail-fast: false
       matrix:
         images:
-          # - image: test-node
-          # - image: test-node-cloud
+          - image: test-node
+          - image: test-node-cloud
           - image: test-devnet
 
     steps:
@@ -107,6 +107,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/${{ matrix.images.image }}/digests
+          pattern: digests-${{ matrix.images.image }}-*
           merge-multiple: true
 
       - name: Login to GitHub Container Registry

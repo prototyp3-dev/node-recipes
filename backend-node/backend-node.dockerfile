@@ -809,8 +809,8 @@ COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
 # decide nginx conf
 if [[ \${CLOUD} = true ]]; then
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-espresso-envs
-        ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
+    ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
 else
     ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
 fi
