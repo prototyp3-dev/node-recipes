@@ -58,7 +58,7 @@ jobs:
           # tags: |
           #   type=sha,format=long,prefix=
           labels: |
-            org.opencontainers.image.title=prototyp3-dev-test-node-cloud
+            org.opencontainers.image.title=prototyp3-dev-${{ matrix.images.image }}
             org.opencontainers.image.description=${{ matrix.images.image }}
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.licenses=Apache-2.0
@@ -74,7 +74,7 @@ jobs:
           target: ${{ matrix.images.target }}
           file: backend-node/${{ matrix.images.dockerfile }}
           context: backend-node
-          outputs: type=registry,push-by-digest=true,name-canonical=true
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -123,17 +123,17 @@ jobs:
             type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
             type=sha
           labels: |
-            org.opencontainers.image.title=prototyp3-dev-test-node-cloud
+            org.opencontainers.image.title=prototyp3-dev-${{ matrix.images.image }}
             org.opencontainers.image.description=${{ matrix.images.image }}
-            org.opencontainers.image.source=https://github.com/prototyp3-dev/node-recipes
+            org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.licenses=Apache-2.0
-            org.opencontainers.image.url=https://github.com/prototyp3-dev/node-recipes
+            org.opencontainers.image.url=${{ github.repository }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/prototyp3-dev/${{ matrix.images.image }}@sha256:%s ' *)
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
 
       - name: Inspect image
         run: |
