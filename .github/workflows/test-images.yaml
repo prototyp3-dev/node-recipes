@@ -94,6 +94,14 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    strategy:
+      fail-fast: false
+      matrix:
+        images:
+          - image: test-node
+          - image: test-node-cloud
+          - image: test-devnet
+
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
