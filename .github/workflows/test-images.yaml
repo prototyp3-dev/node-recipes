@@ -55,6 +55,8 @@ jobs:
         with:
           images: |
               ghcr.io/prototyp3-dev/${{ matrix.images.image }}
+          # tags: |
+          #   type=sha,format=long,prefix=
           labels: |
             org.opencontainers.image.title=prototyp3-dev-test-node-cloud
             org.opencontainers.image.description=${{ matrix.images.image }}
@@ -66,7 +68,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: ${{ matrix.platform }}
-          tags: ${{ steps.meta.outputs.images }}
+          # tags: ${{ steps.meta.outputs.images }}
+          tags: ghcr.io/${{ github.repository }}
           labels: ${{ steps.meta.outputs.labels }}
           target: ${{ matrix.images.target }}
           file: backend-node/${{ matrix.images.dockerfile }}
