@@ -71,7 +71,7 @@ jobs:
           target: ${{ matrix.images.target }}
           file: backend-node/${{ matrix.images.dockerfile }}
           context: backend-node
-          outputs: type=image,name=${{ steps.meta.outputs.labels }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/prototyp3-dev/${{ matrix.images.image }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
