@@ -468,6 +468,7 @@ server {
 EOF
 
 RUN rm /etc/nginx/sites-enabled/*
+RUN chown -R cartesi:cartesi /etc/nginx/sites-enabled
 
 # Configure s6 nginx
 RUN <<EOF

@@ -12,7 +12,7 @@ node-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node.tag
-	docker buildx build --debug -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
+	docker build --debug -f backend-node.dockerfile --target rollups-node-we ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node" \
 		--label "org.opencontainers.image.description=Test Node" \
@@ -26,7 +26,7 @@ node-cloud-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-node-cloud:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .node-cloud.tag
-	docker buildx build -f backend-node.dockerfile --target rollups-node-we-cloud ${ARGS} . \
+	docker build -f backend-node.dockerfile --target rollups-node-we-cloud ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-node-cloud" \
 		--label "org.opencontainers.image.description=Test Node Cloud" \
@@ -41,7 +41,7 @@ devnet-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}
 	IMAGE_TAG=ghcr.io/prototyp3-dev/test-devnet:$$IMAGE_VERSION
 	echo $$IMAGE_TAG > .devnet.tag
-	docker buildx build -f devnet.dockerfile ${ARGS} . \
+	docker build -f devnet.dockerfile ${ARGS} . \
 		-t $$IMAGE_TAG \
 		--label "org.opencontainers.image.title=prototyp3-dev-test-devnet" \
 		--label "org.opencontainers.image.description=Test Devnet" \
@@ -54,10 +54,10 @@ devnet-image:
 	echo "Espresso deployment:"
 	cat .devnet_espresso_deployment.txt
 
-setup-multi-platform-builder:
-	@echo "Setting up multi-platform builder..."
-	docker buildx create --name multiarch_builder --use --platform=linux/arm64,linux/amd64 || true
-	docker buildx inspect --bootstrap
+# setup-multi-platform-builder:
+# 	@echo "Setting up multi-platform builder..."
+# 	docker buildx create --name multiarch_builder --use --platform=linux/arm64,linux/amd64 || true
+# 	docker buildx inspect --bootstrap
 
 nonode-image:
 	@IMAGE_VERSION=${RELEASE_VERSION}${RELEASE_SUFFIX}

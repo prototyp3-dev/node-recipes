@@ -7,7 +7,7 @@ x-env: &env
 
 services:
   devnet:
-    image: ghcr.io/prototyp3-dev/test-devnet:2.0.0
+    image: ghcr.io/prototyp3-dev/test-devnet:latest
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8545/ -H 'Content-Type: application/json' -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":67}'"]
       interval: 1s
@@ -35,7 +35,7 @@ services:
       POSTGRES_DB: rollupsdb
 
   espresso:
-    image: ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
+    image: ghcr.io/prototyp3-dev/test-node:latest
     entrypoint: /init
     networks:
       - devnet
@@ -78,7 +78,7 @@ services:
      - ${ENVFILENAME}
 
   node:
-    image: ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
+    image: ghcr.io/prototyp3-dev/test-node:latest
     entrypoint: /init
     healthcheck:
       test: ["CMD-SHELL", "curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:$${CARTESI_HTTP_PORT}/healthz"]

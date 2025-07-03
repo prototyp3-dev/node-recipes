@@ -17,13 +17,13 @@ rm recipes.zip
 Also, make sure you have the updated test node images:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
+docker pull ghcr.io/prototyp3-dev/test-node:latest
 ```
 
 And if you will run a local devnet:
 
 ```shell
-docker pull ghcr.io/prototyp3-dev/test-devnet:2.0.0
+docker pull ghcr.io/prototyp3-dev/test-devnet:latest
 ```
 
 ## Localhost
@@ -183,7 +183,7 @@ mkdir -p .fly/node
 
 ```toml
 [build]
-  image = "ghcr.io/prototyp3-dev/test-node-cloud:2.0.0-alpha"
+  image = "ghcr.io/prototyp3-dev/test-node-cloud:latest"
 
 [http_service]
   internal_port = 80
@@ -350,7 +350,7 @@ After a successful execution, your snapshot will be located inside `./.cartesi/i
 The following commands assumes you have the `cartesi-machine` command on your system. Alternatively, you might want to use a docker container with all required packeges and run in interactive mode:
 
 ```shell
-docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:2.0.0-alpha bash
+docker run -it --rm -v $PWD:/workdir -w /workdir ghcr.io/prototyp3-dev/test-node:2:latest bash
 ```
 
 First, you should start off from a base rootfs, either the one installed with cartesi machine (`/share/cartesi-machine/images/rootfs.ext2`) or one generated with cartesi cli (`/path/to/app/.cartesi/root.ext2`). Copy the base image to a working dir so you can start making changes. 
