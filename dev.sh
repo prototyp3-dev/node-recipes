@@ -48,6 +48,15 @@ check_send_deps() {
     }
 }
 
+# Check fly.io deployment dependencies
+check_fly_deps() {
+    command -v fly >/dev/null || { 
+        error "Missing dependency for fly.io deployment: install fly CLI"
+        echo "Install with: curl -L https://fly.io/install.sh | sh"
+        exit 1
+    }
+}
+
 # Check setup dependencies (for initial setup)
 check_setup_deps() {
     local missing=()
@@ -569,7 +578,7 @@ COMMANDS:
     
     stop                   Stop all services
     
-    deploy [options]       Deploy application
+    deploy [options]       Deploy application on local node
         --app-name NAME    Application name
         --image-path PATH  Snapshot location
     
@@ -578,6 +587,18 @@ COMMANDS:
         -d, --data DATA    Transaction data in hex (required)
         -k, --private-key  Private key for signing (required)
         Optional: -c chain-id (31337), -n node-url (localhost:8080)
+    
+    deploy-node            Deploy node to fly.io
+        --app-name NAME    Fly app name (required)
+        --env-file FILE    Environment file (required)
+        --volume NAME      Volume name for storage
+    
+    deploy-app             Deploy contracts and register app
+        --app-name NAME    Fly app name (required)
+        --env-file FILE    Environment file (required)
+        --owner ADDRESS    Owner for new contracts
+        --skip-contracts   Use existing contracts
+        --application-address  Existing app contract address
     
     help                   Show this help
 
@@ -593,6 +614,398 @@ EXAMPLES:
     ./dev.sh stop                      # Stop everything
 
 EOF
+}
+
+# Deploy node to fly.io
+deploy_node() {
+    check_fly_deps
+    
+    local app_name=""
+    local env_file=""
+    local volume_name=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --app-name)
+                app_name="$2"
+                shift 2
+                ;;
+            --env-file)
+                env_file="$2"
+                shift 2
+                ;;
+            --volume)
+                volume_name="$2"
+                shift 2
+                ;;
+            -h|--help)
+                cat << 'EOF'
+Usage: ./dev.sh deploy-node --app-name APP_NAME --env-file ENV_FILE [OPTIONS]
+
+Deploy Cartesi node infrastructure to fly.io
+
+REQUIRED:
+    --app-name NAME        Fly app name
+    --env-file FILE        Environment file (e.g., .env.testnet)
+
+OPTIONAL:
+    --volume NAME          Volume name for persistent storage
+    -h, --help            Show this help
+
+EXAMPLES:
+    ./dev.sh deploy-node --app-name my-cartesi-node --env-file .env.testnet
+    ./dev.sh deploy-node --app-name my-node --env-file .env.testnet --volume node-volume
+EOF
+                return 0
+                ;;
+            *)
+                error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    
+    # Validate required arguments
+    if [[ -z "$app_name" ]] || [[ -z "$env_file" ]]; then
+        error "Missing required arguments"
+        echo "Use: ./dev.sh deploy-node --help for usage"
+        return 1
+    fi
+    
+    if [[ ! -f "$env_file" ]]; then
+        error "Environment file not found: $env_file"
+        return 1
+    fi
+    
+    log "Deploying Cartesi node to fly.io..."
+    
+    # Create fly directory structure
+    mkdir -p .fly/node
+    
+    # Create fly.toml configuration
+    log "Creating fly.toml configuration..."
+    cat > .fly/node/fly.toml << EOF
+[build]
+  image = "ghcr.io/prototyp3-dev/test-node-cloud:latest"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = false
+  min_machines_running = 1
+  processes = ['app']
+
+[metrics]
+  port = 9000
+  path = "/metrics"
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+EOF
+    
+    # Add volume mount if specified
+    if [[ -n "$volume_name" ]]; then
+        log "Adding volume mount: $volume_name"
+        cat >> .fly/node/fly.toml << EOF
+
+[[mounts]]
+  source = '$volume_name'
+  destination = '/mnt'
+  initial_size = '5gb'
+EOF
+    fi
+    
+    # Create/launch the fly.io app without deploying
+    log "Creating fly app: $app_name"
+    if ! fly launch --name "$app_name" --copy-config --no-deploy -c .fly/node/fly.toml; then
+        warn "App may already exist, continuing..."
+    fi
+    
+    # Create database
+    log "Creating Postgres database..."
+    fly postgres create
+    
+    echo
+    warn "IMPORTANT: Update your database connection string in $env_file"
+    echo "  1. Copy the DATABASE_URL from the output above"
+    echo "  2. Modify it to use 'postgres' database and add sslmode=disable:"
+    echo "     Format: postgres://{username}:{password}@{hostname}:{port}/postgres?sslmode=disable"
+    echo "  3. Add it to your $env_file as:"
+    echo "     CARTESI_DATABASE_CONNECTION=\"postgres://user:pass@host:port/postgres?sslmode=disable\""
+    echo "  4. Save the file"
+    echo
+    read -p "Press Enter after updating $env_file with the database connection..."
+    
+    # Verify the database connection was added
+    if ! grep -q "CARTESI_DATABASE_CONNECTION" "$env_file"; then
+        error "CARTESI_DATABASE_CONNECTION not found in $env_file"
+        echo "Please add the database connection string and try again"
+        return 1
+    fi
+    
+    log "Database connection found in $env_file ✓"
+    
+    # Import environment secrets
+    log "Importing environment secrets..."
+    fly secrets import -c .fly/node/fly.toml < "$env_file"
+    
+    # Deploy the node
+    log "Deploying node to fly.io..."
+    fly deploy --ha=false -c .fly/node/fly.toml
+    
+    echo
+    warn "Next steps:"
+    echo "  Deploy app: ./dev.sh deploy-app --app-name $app_name --env-file $env_file --owner OWNER_ADDRESS"
+}
+
+# Deploy contracts and register app
+deploy_app() {
+    check_fly_deps
+    
+    local app_name=""
+    local env_file=""
+    local owner=""
+    local image_path=${IMAGE_PATH}
+    local cartesi_app_name=${APP_NAME}
+    local skip_contracts=false
+    local application_address=""
+    local consensus_address=""
+    local epoch_length=""
+    local salt=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --app-name)
+                app_name="$2"
+                shift 2
+                ;;
+            --env-file)
+                env_file="$2"
+                shift 2
+                ;;
+            --owner)
+                owner="$2"
+                shift 2
+                ;;
+            --image-path)
+                image_path="$2"
+                shift 2
+                ;;
+            --cartesi-app-name)
+                cartesi_app_name="$2"
+                shift 2
+                ;;
+            --skip-contracts)
+                skip_contracts=true
+                shift
+                ;;
+            --application-address)
+                application_address="$2"
+                skip_contracts=true
+                shift 2
+                ;;
+            --consensus-address)
+                consensus_address="$2"
+                shift 2
+                ;;
+            --epoch-length)
+                epoch_length="$2"
+                shift 2
+                ;;
+            --salt)
+                salt="$2"
+                shift 2
+                ;;
+            -h|--help)
+                cat << 'EOF'
+Usage: ./dev.sh deploy-app --app-name FLY_APP_NAME --env-file ENV_FILE [OPTIONS]
+
+Deploy contracts and register app with fly.io node
+
+REQUIRED:
+    --app-name NAME        Fly app name
+    --env-file FILE        Environment file (e.g., .env.testnet)
+
+REQUIRED (if not skipping contracts):
+    --owner ADDRESS        Owner address (same as CARTESI_AUTH_PRIVATE_KEY owner)
+
+REQUIRED (if skipping contracts):
+    --application-address  Existing application contract address
+
+OPTIONAL:
+    --image-path PATH      App snapshot path (default: .cartesi/image)
+    --cartesi-app-name     Cartesi app name (default: directory name)
+    --skip-contracts       Skip contract deployment, use existing addresses
+    --consensus-address    Consensus address (for existing or new deployment)
+    --epoch-length         Epoch length for new deployment
+    --salt                 Salt for new deployment
+    -h, --help            Show this help
+
+EXAMPLES:
+    # Deploy new contracts and register app
+    ./dev.sh deploy-app --app-name my-node --env-file .env.testnet --owner 0x1234...
+    
+    # Use existing contracts and register app
+    ./dev.sh deploy-app --app-name my-node --env-file .env.testnet --application-address 0x5678... --consensus-address 0x9abc...
+    
+    # Skip contracts entirely
+    ./dev.sh deploy-app --app-name my-node --env-file .env.testnet --skip-contracts
+EOF
+                return 0
+                ;;
+            *)
+                error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    
+    # Validate required arguments
+    if [[ -z "$app_name" ]] || [[ -z "$env_file" ]]; then
+        error "Missing required arguments: --app-name and --env-file"
+        echo "Use: ./dev.sh deploy-app --help for usage"
+        return 1
+    fi
+    
+    if [[ "$skip_contracts" == false ]] && [[ -z "$owner" ]] && [[ -z "$application_address" ]]; then
+        error "Missing required argument: --owner (for new deployment) or --application-address (for existing)"
+        echo "Use: ./dev.sh deploy-app --help for usage"
+        return 1
+    fi
+    
+    if [[ ! -f "$env_file" ]]; then
+        error "Environment file not found: $env_file"
+        return 1
+    fi
+    
+    if [[ ! -d "$image_path" ]]; then
+        error "Snapshot not found at $image_path. Please create your application snapshot first."
+        return 1
+    fi
+    
+    # Step 1: Transfer snapshot files to fly.io node
+    log "Step 1: Transferring app snapshot files to fly.io node..."
+    
+    # Create app directory on fly
+    log "Creating app directory on node..."
+    if ! fly ssh console -c .fly/node/fly.toml -C "mkdir -p /mnt/apps/$cartesi_app_name"; then
+        error "Failed to create app directory on fly.io node"
+        return 1
+    fi
+    
+    # Transfer snapshot files automatically using SFTP
+    log "Transferring snapshot files automatically using SFTP..."
+    
+    # Generate SFTP commands file
+    local sftp_commands="/tmp/fly_sftp_commands.txt"
+    > "$sftp_commands"  # Clear the file
+    
+    # Count total files for progress tracking
+    local total_files=$(ls -1 "$image_path"/* | wc -l)
+    log "Preparing to transfer $total_files files..."
+    
+    # Generate put commands for all files
+    for file_path in "$image_path"/*; do
+        local filename=$(basename "$file_path")
+        echo "put $file_path /mnt/apps/$cartesi_app_name/$filename" >> "$sftp_commands"
+    done
+    
+    log "SFTP commands generated. Transferring files..."
+    
+    # Execute SFTP batch transfer
+    if ! fly sftp shell -c .fly/node/fly.toml < "$sftp_commands"; then
+        error "Failed to transfer files via SFTP"
+        rm -f "$sftp_commands"
+        return 1
+    fi
+    
+    # Cleanup
+    rm -f "$sftp_commands"
+    
+    log "✅ All snapshot files transferred successfully!"
+    
+    # Verify files were transferred correctly
+    log "Verifying file transfer..."
+    if ! fly ssh console -c .fly/node/fly.toml -C "ls -la /mnt/apps/$cartesi_app_name" > /tmp/remote_files.txt; then
+        warn "Could not verify remote files, but transfer appeared successful"
+    else
+        log "Remote files:"
+        cat /tmp/remote_files.txt
+        rm -f /tmp/remote_files.txt
+    fi
+    
+    # Step 2: Deploy contracts and register app (all on fly.io node)
+    if [[ "$skip_contracts" == false ]]; then
+        log "Step 2: Deploying contracts and registering app on fly.io node..."
+        
+        # Build deploy command to run on fly.io node
+        local deploy_cmd="APP_NAME=$cartesi_app_name OWNER=$owner"
+        
+        if [[ -n "$consensus_address" ]]; then
+            deploy_cmd="$deploy_cmd CONSENSUS_ADDRESS=$consensus_address"
+        fi
+        
+        if [[ -n "$epoch_length" ]]; then
+            deploy_cmd="$deploy_cmd EPOCH_LENGTH=$epoch_length"
+        fi
+        
+        if [[ -n "$salt" ]]; then
+            deploy_cmd="$deploy_cmd SALT=$salt"
+        fi
+        
+        # Run deployment on fly.io node
+        local deploy_output
+        if ! deploy_output=$(fly ssh console -c .fly/node/fly.toml -C "bash -c '$deploy_cmd /deploy.sh /mnt/apps/$cartesi_app_name'" 2>&1); then
+            error "Contract deployment command failed on fly.io node"
+            echo "$deploy_output"
+            return 1
+        fi
+        
+        # Show deployment output and check for failure indicators
+        echo "$deploy_output"
+        if echo "$deploy_output" | grep -q -E "(Not deployed|failed|failure|error|Error)"; then
+            return 1
+        fi
+    else
+        log "Step 2: Registering existing app on fly.io node..."
+        
+        # Register existing app
+        local register_cmd="APP_NAME=$cartesi_app_name"
+        
+        if [[ -n "$application_address" ]]; then
+            register_cmd="$register_cmd APPLICATION_ADDRESS=$application_address"
+        fi
+        
+        if [[ -n "$consensus_address" ]]; then
+            register_cmd="$register_cmd CONSENSUS_ADDRESS=$consensus_address"
+        fi
+        
+        # Run registration on fly.io node
+        local register_output
+        if ! register_output=$(fly ssh console -c .fly/node/fly.toml -C "bash -c '$register_cmd /register.sh /mnt/apps/$cartesi_app_name'" 2>&1); then
+            error "App registration command failed on fly.io node"
+            echo "$register_output"
+            return 1
+        fi
+        
+        # Show registration output and check for failure indicators
+        echo "$register_output"
+        if echo "$register_output" | grep -q -E "(Not registered|failed|failure|error|Error)"; then
+            return 1
+        fi
+    fi
+    
+    # Cleanup
+    rm -f /tmp/fly_transfers.txt
+    
+    echo
+    info "Your application is now running on: https://$app_name.fly.dev"
 }
 
 # Main command dispatcher
@@ -615,6 +1028,14 @@ main() {
         send)
             shift
             send "$@"
+            ;;
+        deploy-node)
+            shift
+            deploy_node "$@"
+            ;;
+        deploy-app)
+            shift
+            deploy_app "$@"
             ;;
         help|--help|-h)
             help

@@ -61,6 +61,75 @@ Alternatively, for customized deployment, use:
 ./dev.sh stop
 ```
 
+---
+
+## Deploy in testnet environment
+
+For testnet deployment, we'll use fly.io to host the node and Ethereum Sepolia with Espresso Decaf as sequencer. 
+
+### Prerequisites
+
+Install fly.io CLI:
+```bash
+curl -L https://fly.io/install.sh | sh
+```
+
+### 1. Create Environment File for Ethereum Sepolia and Espresso Decaf Testnet
+
+Create `.env.sepolia` with the following configuration:
+
+```bash
+cat > .env.sepolia << 'EOF'
+CARTESI_LOG_LEVEL=info
+CARTESI_AUTH_KIND=private_key
+CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc70074BDD26d8cF983Ca6A5b89b8db52D5850051
+CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
+CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7006f70875BaDe89032001262A846D3Ee160051
+CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xc700285Ab555eeB5201BC00CFD4b2CC8DED90051
+MAIN_SEQUENCER=espresso
+CARTESI_FEATURE_GRAPHQL_ENABLED=true
+CARTESI_FEATURE_RPC_ENABLED=true
+ESPRESSO_BASE_URL=https://query.decaf.testnet.espresso.network
+ESPRESSO_NAMESPACE=55555
+CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=
+CARTESI_BLOCKCHAIN_WS_ENDPOINT=
+CARTESI_BLOCKCHAIN_ID=11155111
+CARTESI_AUTH_PRIVATE_KEY=
+CARTESI_DATABASE_CONNECTION=
+EOF
+```
+
+**Important**: Update the following variables before deployment:
+- `CARTESI_BLOCKCHAIN_HTTP_ENDPOINT`: Your Sepolia RPC endpoint (e.g., Infura, Alchemy)
+- `CARTESI_BLOCKCHAIN_WS_ENDPOINT`: Your Sepolia WebSocket endpoint  
+- `CARTESI_AUTH_PRIVATE_KEY`: Private key for contract deployments
+- `CARTESI_DATABASE_CONNECTION`: Will be added after database creation in step 2
+
+### 2. Deploy Node Infrastructure
+
+```bash
+./dev.sh deploy-node --app-name my-cartesi-node --env-file .env.sepolia
+```
+
+This will:
+- Create fly.toml configuration
+- Launch fly.io app (interactive setup)
+- Create Postgres database (interactive setup)
+- **Pause for manual step**: Update database connection in your .env.sepolia file
+
+### 3. Deploy Application and Contracts
+
+For new contract deployment:
+```bash
+./dev.sh deploy-app --app-name my-cartesi-node --env-file .env.sepolia --owner 0xYourOwnerAddress
+```
+
+For existing contracts:
+```bash
+./dev.sh deploy-app --app-name my-cartesi-node --env-file .env.sepolia --application-address 0xExistingAppAddress --consensus-address 0xConsensusAddress
+```
+
+---
 
 ## Dependencies
 
