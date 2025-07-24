@@ -14,7 +14,7 @@ ARG ROLLUPSNODE_VERSION=2.0.0-alpha.6
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
 ARG ROLLUPSNODE_ACCEPT_DAVE_PATCH=https://gist.githubusercontent.com/lynoferraz/122bf63fdc23737a6bf00a1667799f1d/raw/6632b721934eec8902f9bcd53e9686f4c96b836b/node_accept_dave_consensus-v2.0.0-alpha.6.patch
-ARG ESPRESSOREADER_VERSION=0.4.0
+ARG ESPRESSOREADER_VERSION=0.4.0-1
 ARG ESPRESSOREADER_BRANCH=feature/adapt-node-alpha6
 ARG ESPRESSOREADER_DIR=rollups-espresso-reader
 # ARG ESPRESSO_DEV_NODE_TAG=20250428-dev-node-decaf-pos
@@ -120,13 +120,13 @@ RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && \
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && go mod download
 RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && make build-go
 
-ARG ESPRESSOREADER_VERSION
-ARG ESPRESSOREADER_DIR
+# ARG ESPRESSOREADER_VERSION
+# ARG ESPRESSOREADER_DIR
 # ARG ESPRESSOREADER_BRANCH
 
-RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
-    tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
+# RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
+# RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
+#     tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
 
 # RUN wget -q https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader \
 #     -O ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-espresso-reader
@@ -134,10 +134,10 @@ RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/ta
 # RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
 #     https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
 
-RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
-RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
-    # go build -o cartesi-rollups-espresso-reader && \
-    go build -o cartesi-rollups-espresso-reader-db-migration dev/migrate/main.go
+# RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
+# RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
+#     go build -o cartesi-rollups-espresso-reader && \
+#     go build -o cartesi-rollups-espresso-reader-db-migration dev/migrate/main.go
 
 
 # ARG GRAPHQL_VERSION
@@ -231,6 +231,8 @@ EOF
 ARG ESPRESSOREADER_VERSION
 RUN curl -s -L https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader-v${ESPRESSOREADER_VERSION}-linux-${TARGETARCH}.tar.gz | \
     tar xzf - -C /usr/local/bin cartesi-rollups-espresso-reader
+RUN curl -s -L https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader-db-migration-v${ESPRESSOREADER_VERSION}-linux-${TARGETARCH}.tar.gz | \
+    tar xzf - -C /usr/local/bin cartesi-rollups-espresso-reader-db-migration
 
 # install cartesi-rollups-graphql
 ARG GRAPHQL_VERSION
@@ -245,10 +247,10 @@ RUN curl -s -L https://github.com/cartesi/dave/releases/download/v${PRT_NODE_VER
 # # Copy Go binary.
 ARG GO_BUILD_PATH
 ARG ROLLUPSNODE_DIR
-ARG ESPRESSOREADER_DIR
+# ARG ESPRESSOREADER_DIR
 # ARG GRAPHQL_DIR
 COPY --from=go-builder ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}/cartesi-rollups-* /usr/bin
-COPY --from=go-builder ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-* /usr/bin
+# COPY --from=go-builder ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-* /usr/bin
 # COPY --from=go-builder ${GO_BUILD_PATH}/${cartesi-rollups-graphql}/cartesi-rollups-* /usr/bin
 
 # Install espresso
