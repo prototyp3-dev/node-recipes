@@ -172,8 +172,8 @@ setup_node() {
     log "Setting up Cartesi node environment..."
     
     # Pull required images
-    docker pull ghcr.io/prototyp3-dev/test-node:2.0.0-alpha
-    docker pull ghcr.io/prototyp3-dev/test-devnet:2.0.0
+    docker pull ghcr.io/prototyp3-dev/test-node:latest
+    docker pull ghcr.io/prototyp3-dev/test-devnet:latest
 }
 
 # Create environment file using makefile and add espresso config
